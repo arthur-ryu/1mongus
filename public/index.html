@@ -32,13 +32,13 @@ input:disabled { opacity: .5; }
 canvas { display: block; width: 100%; height: 100%; }
 
 .top-right-hud { position: absolute; top: 16px; right: 16px; display: none; gap: 12px; z-index: 60; pointer-events: auto; }
-.hud-circle-btn { width: 58px; height: 58px; cursor: pointer; border-radius: 50%; background: #fff; border: 3px solid #64748b; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: transform .1s; font-size: 26px; }
+.hud-circle-btn { width: clamp(44px, 9vh, 58px); height: clamp(44px, 9vh, 58px); cursor: pointer; border-radius: 50%; background: #fff; border: 3px solid #64748b; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: transform .1s; font-size: 26px; }
 .hud-circle-btn:active { transform: scale(.92); }
 .hud-map-btn { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/map.png'); background-size: contain; background-repeat: no-repeat; background-position: center; }
 
 .action-btn-group { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; z-index: 60; align-items: flex-end; }
 .action-btn-row { display: flex; gap: 14px; justify-content: flex-end; }
-.among-img-btn { width: 82px; height: 82px; cursor: pointer; background-size: contain; background-repeat: no-repeat; background-position: center; transition: all .1s; opacity: .35; pointer-events: none; position: relative; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
+.among-img-btn { width: clamp(56px, 12vh, 82px); height: clamp(56px, 12vh, 82px); cursor: pointer; background-size: contain; background-repeat: no-repeat; background-position: center; transition: all .1s; opacity: .35; pointer-events: none; position: relative; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
 .among-img-btn.active { opacity: 1 !important; pointer-events: auto !important; }
 .among-img-btn:active { transform: translateY(4px) scale(.95); }
 .btn-use { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/use.png'); }
@@ -46,10 +46,15 @@ canvas { display: block; width: 100%; height: 100%; }
 .btn-kill { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/kill.png'); display: none; }
 .btn-vent { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/vent.png'); display: none; }
 .btn-report { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/report.png'); }
-.cooldown-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.65); border-radius: 50%; display: none; justify-content: center; align-items: center; font-size: 26px; color: #fff; font-weight: 900; -webkit-text-stroke: 1.5px #000; pointer-events: none; }
+.cooldown-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.65); border-radius: 50%; display: none; justify-content: center; align-items: center; font-size: clamp(18px, 4vh, 26px); color: #fff; font-weight: 900; -webkit-text-stroke: 1.5px #000; pointer-events: none; }
 
 #sab-banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: none; padding: 8px 22px; background: #ef4444; color: #fff; border: 3px solid #0f172a; border-radius: 20px; font-size: 18px; z-index: 62; pointer-events: none; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .6; } }
+
+/* 누가 나갔는지 오른쪽에 뜨는 빨간 알림 */
+#leave-toasts { position: fixed; top: clamp(70px, 14vh, 92px); right: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 2000; pointer-events: none; }
+.leave-toast { color: #ef4444; font-size: clamp(14px, 2.8vh, 22px); font-weight: bold; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff, 0 3px 8px rgba(0,0,0,.35); transition: opacity .5s, transform .5s; animation: toastIn .25s ease-out; }
+@keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
 
 #vent-nav-ui { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 65; }
 .vent-arrow-btn { position: absolute; width: 68px; height: 68px; display: flex; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; transform-origin: center center; }
@@ -63,37 +68,46 @@ canvas { display: block; width: 100%; height: 100%; }
 #joystick-knob { position: absolute; top: 32px; left: 32px; width: 56px; height: 56px; background: radial-gradient(circle at 35% 35%, #0284c7, #0369a1); border: 3px solid #0f172a; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,.3); }
 
 #map-modal, #admin-modal, #cam-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.7); z-index: 400; justify-content: center; align-items: center; pointer-events: auto; }
-.map-box { width: min(880px, 92vw); aspect-ratio: 16/9; background: #fff; border: 4px solid #64748b; border-radius: 20px; position: relative; box-shadow: 0 20px 40px rgba(0,0,0,.3); }
+.map-box { width: min(880px, 92vw, calc(88vh * 16 / 9)); aspect-ratio: 16/9; background: #fff; border: 4px solid #64748b; border-radius: 20px; position: relative; box-shadow: 0 20px 40px rgba(0,0,0,.3); }
 .map-close-btn { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%; background: #ef4444; color: #fff; border: 3px solid #0f172a; font-size: 18px; cursor: pointer; z-index: 10; }
 
 #sabotage-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.7); z-index: 420; justify-content: center; align-items: center; pointer-events: auto; }
-.sabotage-box { width: min(880px, 92vw); aspect-ratio: 16/9; background: #0f172a url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/The_Skeld_map.png') center/100% 100% no-repeat; border: 4px solid #ef4444; border-radius: 20px; position: relative; box-shadow: 0 0 40px rgba(239,68,68,.3); }
+.sabotage-box { width: min(880px, 92vw, calc(88vh * 16 / 9)); aspect-ratio: 16/9; background: #0f172a url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/The_Skeld_map.png') center/100% 100% no-repeat; border: 4px solid #ef4444; border-radius: 20px; position: relative; box-shadow: 0 0 40px rgba(239,68,68,.3); }
 .sab-icon { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: #ef4444; border: 3px solid #fff; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,.4); font-size: 20px; }
 .sab-icon.door { background: #f59e0b; }
 .sab-icon.off { opacity: .35; pointer-events: none; filter: grayscale(.8); }
 
 #meeting-intro-screen { position: fixed; inset: 0; z-index: 900; display: none; flex-direction: column; justify-content: center; align-items: center; background: rgba(15,23,42,.93); text-align: center; gap: 14px; }
 #mi-title { font-size: clamp(36px, 7vw, 70px); color: #ef4444; -webkit-text-stroke: 2px #000; }
+#mi-body-canvas { display: none; width: min(240px, 40vw); height: auto; }
 #mi-sub { font-size: clamp(18px, 3vw, 28px); color: #fff; }
 
 #meeting-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.65); z-index: 500; justify-content: center; align-items: center; padding: 16px; pointer-events: auto; }
-.meeting-box { background: #f8fafc; border: 6px solid #64748b; border-radius: 24px; width: min(920px, 94vw); height: min(600px, 92vh); display: flex; flex-direction: column; padding: 22px; gap: 16px; box-shadow: 0 20px 50px rgba(15,23,42,.35); position: relative; }
+.meeting-box { background: #f8fafc; border: 6px solid #64748b; border-radius: 24px; width: min(1000px, 96vw); height: min(640px, 94vh); display: flex; flex-direction: column; padding: clamp(10px, 2vh, 22px); gap: clamp(8px, 1.6vh, 16px); box-shadow: 0 20px 50px rgba(15,23,42,.35); position: relative; }
 .meeting-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #e2e8f0; padding-bottom: 12px; }
-.meeting-title { color: #ef4444; font-size: 26px; -webkit-text-stroke: 1.5px #0f172a; }
+.meeting-title { color: #ef4444; font-size: clamp(20px, 4vh, 28px); -webkit-text-stroke: 1.5px #0f172a; }
 .meeting-chat-btn { width: 48px; height: 48px; border-radius: 50%; background: #0284c7; color: #fff; border: 3px solid #0f172a; font-size: 22px; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 8px rgba(0,0,0,.15); transition: transform .1s; }
 .meeting-chat-btn:active { transform: scale(.92); }
-.voter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow-y: auto; flex: 1; padding: 4px; }
-.voter-card { background: #fff; border: 3px solid #cbd5e1; border-radius: 14px; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; min-height: 54px; box-shadow: 0 4px 8px rgba(0,0,0,.04); transition: border-color .1s, transform .1s; }
+
+/* 투표 목록: 어몽어스처럼 긴 가로 박스가 2열로 쭉 내려옴 */
+.voter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(6px, 1.4vh, 12px); overflow-y: auto; flex: 1; padding: 4px; align-content: start; }
+.voter-card { background: #fff; border: 3px solid #cbd5e1; border-radius: 14px; padding: 6px clamp(10px, 1.6vw, 18px); display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; min-height: clamp(46px, 10vh, 70px); font-size: clamp(16px, 3.2vh, 26px); box-shadow: 0 4px 8px rgba(0,0,0,.04); transition: border-color .1s, transform .1s; }
 .voter-card:hover { border-color: #0284c7; transform: translateY(-2px); }
-.voter-card.dead { opacity: .45; filter: grayscale(1); pointer-events: none; background: #f1f5f9; }
+.voter-card.dead { background: #e2e8f0; pointer-events: none; }
+.voter-card.dead .vc-dot, .voter-card.dead .vc-name { opacity: .45; filter: grayscale(1); }
 .voter-card.locked { pointer-events: none !important; }
-.voted-badge { background: #22c55e; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 20px; border: 1.5px solid #0f172a; font-weight: bold; margin-left: 6px; }
-.voted-by-container { display: flex; gap: 4px; align-items: center; }
-.vote-mini-marker { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #000; font-size: 10px; display: flex; align-items: center; justify-content: center; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.vc-left { display: flex; align-items: center; gap: .5em; min-width: 0; }
+.vc-dotwrap { position: relative; width: 1.6em; height: 1.6em; flex: none; }
+.vc-dot { width: 100%; height: 100%; border-radius: 50%; border: 3px solid #000; }
+.dead-x { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 1.7em; line-height: 1; font-weight: bold; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.vc-name { font-size: 1em; font-weight: bold; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.voted-badge { background: #22c55e; color: #fff; font-size: .5em; padding: 3px 8px; border-radius: 20px; border: 1.5px solid #0f172a; font-weight: bold; margin-left: 4px; flex: none; }
+.voted-by-container { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.vote-mini-marker { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #000; font-size: 12px; display: flex; align-items: center; justify-content: center; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 .meeting-footer { display: flex; justify-content: space-between; align-items: center; border-top: 3px solid #e2e8f0; padding-top: 10px; }
-.skip-btn { width: auto; padding: 10px 24px; background: #e2e8f0; color: #0f172a; border: 3px solid #64748b; border-radius: 12px; cursor: pointer; font-size: 16px; font-weight: bold; }
+.skip-btn { width: auto; padding: 10px 24px; background: #e2e8f0; color: #0f172a; border: 3px solid #64748b; border-radius: 12px; cursor: pointer; font-size: clamp(14px, 2.6vh, 18px); font-weight: bold; }
 .skip-btn.locked { opacity: .5; pointer-events: none; }
-.meeting-timer-box { font-size: 18px; font-weight: bold; color: #ef4444; background: #fee2e2; padding: 6px 16px; border-radius: 20px; border: 2px solid #ef4444; }
+.meeting-timer-box { font-size: clamp(14px, 2.6vh, 18px); font-weight: bold; color: #ef4444; background: #fee2e2; padding: 6px 16px; border-radius: 20px; border: 2px solid #ef4444; }
 
 #chat-modal { display: none; position: absolute; inset: 16px; background: #fff; border: 4px solid #64748b; border-radius: 20px; z-index: 550; flex-direction: column; padding: 16px; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.25); }
 .chat-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
@@ -111,6 +125,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .chat-input-bar button { width: auto; padding: 10px 22px; background: #0284c7; color: #fff; border: 2px solid #0f172a; cursor: pointer; }
 
 #role-reveal-screen, #ejection-screen { position: fixed; inset: 0; z-index: 1000; display: none; flex-direction: column; justify-content: center; align-items: center; background: #000; text-align: center; }
+#ejection-text { font-size: clamp(22px, 5vh, 36px); color: #fff; text-shadow: 2px 2px #000; white-space: pre-line; line-height: 1.7; min-height: 4em; padding: 0 20px; }
 #role-title { font-size: clamp(54px, 10vw, 92px); -webkit-text-stroke: 3px #000; }
 #sab-flash { position: fixed; inset: 0; pointer-events: none; z-index: 45; display: none; background: radial-gradient(ellipse at center, rgba(239,68,68,0) 35%, rgba(239,68,68,.6) 100%); animation: redflash 1.2s ease-in-out infinite; }
 @keyframes redflash { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
@@ -132,10 +147,16 @@ canvas { display: block; width: 100%; height: 100%; }
 </div>
 
 <div id="ejection-screen">
-  <div id="ejection-text" style="font-size:32px; color:#fff; text-shadow:2px 2px #000;">누군가 우주 밖으로 방출되었습니다.</div>
+  <div id="ejection-text"></div>
 </div>
 
-<div id="meeting-intro-screen"><div id="mi-title"></div><div id="mi-sub"></div></div>
+<div id="meeting-intro-screen">
+  <div id="mi-title"></div>
+  <canvas id="mi-body-canvas" width="240" height="150"></canvas>
+  <div id="mi-sub"></div>
+</div>
+
+<div id="leave-toasts"></div>
 
 <div id="screen-auth" class="screen active">
   <div class="card">
@@ -192,8 +213,8 @@ canvas { display: block; width: 100%; height: 100%; }
       <div id="btn-report" class="among-img-btn btn-report" onclick="triggerReport()"></div>
     </div>
     <div class="action-btn-row">
+      <div id="btn-sabotage" class="among-img-btn btn-sabotage" onclick="triggerSabotage()"><div id="sab-cooldown-num" class="cooldown-overlay"></div></div>
       <div id="btn-kill" class="among-img-btn btn-kill" onclick="triggerKill()"><div id="kill-cooldown-num" class="cooldown-overlay"></div></div>
-      <div id="btn-sabotage" class="among-img-btn btn-sabotage" onclick="triggerSabotageOrUse()"><div id="sab-cooldown-num" class="cooldown-overlay"></div></div>
       <div id="btn-use" class="among-img-btn btn-use" onclick="triggerUse()" style="display:none;"></div>
     </div>
   </div>
@@ -279,6 +300,37 @@ const CDN_BASE = 'https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/';
 const skeldMapImg = new Image(); skeldMapImg.src = CDN_BASE + 'The_Skeld_map.png';
 const waitShipImg = new Image(); waitShipImg.src = CDN_BASE + 'wait.png';
 
+// ───── 효과음 (CDN_BASE 폴더에 mp3 파일을 올려두면 됩니다) ─────
+const SFX_NAMES = ['emergency', 'kill', 'lose', 'report', 'sabotage', 'text', 'vent', 'walk', 'win', 'doorclose', 'dooropen'];
+const SFX = {};
+SFX_NAMES.forEach(n => { const a = new Audio(CDN_BASE + n + '.mp3'); a.preload = 'auto'; SFX[n] = a; });
+const SOUND_RANGE = 1000;        // kill / vent 소리가 들리는 거리 (월드 좌표)
+const DOOR_SOUND_RANGE = 1600;   // 문 소리가 들리는 거리
+function playSfx(name, vol = 1) {
+  const a = SFX[name]; if (!a) return;
+  const c = a.cloneNode();
+  c.volume = Math.max(0, Math.min(1, vol));
+  c.play().catch(() => {});
+}
+// 가까울수록 크게, 멀면 안 들림
+function playSfxAt(name, x, y, range = SOUND_RANGE) {
+  const d = Math.hypot(x - localPlayer.x, y - localPlayer.y);
+  const v = Math.pow(Math.max(0, 1 - d / range), 1.5);
+  if (v > 0.02) playSfx(name, v);
+}
+const walkAudio = new Audio(CDN_BASE + 'walk.mp3'); walkAudio.loop = true; walkAudio.volume = 0.35;
+function setWalkSound(on) {
+  if (on) { if (walkAudio.paused) walkAudio.play().catch(() => {}); }
+  else if (!walkAudio.paused) { walkAudio.pause(); walkAudio.currentTime = 0; }
+}
+// 원자로/산소 방해공작 동안은 sabotage.mp3 를 반복 재생
+const sabLoop = new Audio(CDN_BASE + 'sabotage.mp3'); sabLoop.loop = true; sabLoop.volume = 0.6;
+function syncSabLoop() {
+  const want = critSab() && currentRoom && currentRoom.state === 'PLAYING';
+  if (want) { if (sabLoop.paused) { sabLoop.currentTime = 0; sabLoop.play().catch(() => {}); } }
+  else if (!sabLoop.paused) { sabLoop.pause(); sabLoop.currentTime = 0; }
+}
+
 let myId = null, myNickname = 'Crew', currentRoom = null, role = 'CREWMATE';
 let bodies = [], killCooldown = 25, lastKillStamp = 0;
 let isVented = false, currentVentId = null, ventAnimTick = 0, ventAnimDir = 1, ventLids = {};
@@ -293,6 +345,11 @@ const LOBBY_RENDER_W = 2400, LOBBY_RENDER_H = 2200;
 const LOBBY_SPAWN = { x: 1200, y: 1100 };
 const GAME_SPAWN = { x: 3480, y: 1330 };
 const TABLE = { x: 3463, y: 767 }; // 긴급회의 테이블
+
+// 모든 기기에서 똑같이 보이는 화면 범위 (월드 좌표, 16:9). 숫자를 키우면 더 넓게 보임
+const VIEW_W = 1600, VIEW_H = 900;
+const FOG_COLOR = 'rgba(4, 7, 14, 1)'; // 시야 밖은 완전히 가림
+const DOOR_EXT = 12;                    // 닫힌 문을 양끝 벽 쪽으로 살짝 늘려 틈을 막음 (REF 좌표)
 
 const RAW_VENTS = [
         { id: 'v_cafeteria', room: 'Cafeteria', x: 688, y: 152, connections: ['v_hallway_admin', 'v_admin'] },
@@ -367,14 +424,15 @@ const OBST = RAW_OBST.map(o => o[0] === 'c'
 const OB_M = 16;
 
 // 문: 실제 The Skeld 문 방 7곳. s=닫히는 선분들(REF 좌표), ic=사보타지 지도의 버튼 위치
+// (카페테리아 좌/우 문과 창고 문은 벽 모서리에 딱 맞게 고쳐서 틈이 안 생김)
 const DOOR_DEFS = {
-  cafeteria:   { n: '카페테리아', ic: [1620, 540], s: [[1165,248,1165,352],[1424,628,1500,628],[1760,248,1760,346]] },
+  cafeteria:   { n: '카페테리아', ic: [1620, 540], s: [[1160,248,1160,352],[1424,628,1500,628],[1768,248,1768,346]] },
   upperEngine: { n: '위쪽 엔진', ic: [560, 230], s: [[700,248,700,352]] },
   lowerEngine: { n: '아래쪽 엔진', ic: [570, 890], s: [[700,940,700,1043]] },
   security:    { n: '보안실', ic: [785, 735], s: [[690,603,690,705]] },
   medbay:      { n: '의무실', ic: [960, 660], s: [[968,372,1042,372]] },
   electrical:  { n: '전기실', ic: [1000, 1005], s: [[942,1108,1030,1108]] },
-  storage:     { n: '창고', ic: [1380, 1250], s: [[1222,1100,1222,1196]] }
+  storage:     { n: '창고', ic: [1380, 1250], s: [[1222,1095,1222,1196]] }
 };
 const SAB_ICONS = [
   { t: 'lights', e: '💡', x: 1150, y: 820, n: '전등 끄기' },
@@ -459,6 +517,15 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+// 화면 크기와 상관없이 VIEW_W x VIEW_H 만큼만 보이도록 확대/축소 비율 계산
+const viewScale = () => Math.min(canvas.width / VIEW_W, canvas.height / VIEW_H);
+function applyCam(c, sc) {
+  c.translate(canvas.width / 2, canvas.height / 2);
+  c.scale(sc, sc);
+  c.beginPath(); c.rect(-VIEW_W / 2, -VIEW_H / 2, VIEW_W, VIEW_H); c.clip();
+  c.translate(-localPlayer.x, -localPlayer.y);
+}
+
 function switchScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   if (id) document.getElementById(id).classList.add('active');
@@ -469,8 +536,12 @@ function handleAuth() {
 }
 function goToLobbyList() {
   const nick = document.getElementById('player-nickname-input').value.trim();
-  if (nick.length < 2 || nick.length > 5) { document.getElementById('nickname-error').style.display = 'block'; return; }
-  document.getElementById('nickname-error').style.display = 'none';
+  const err = document.getElementById('nickname-error');
+  if (nick.length < 2 || nick.length > 5) {
+    err.innerText = '닉네임은 2글자 이상 5글자 이하로 입력해주세요.';
+    err.style.display = 'block'; return;
+  }
+  err.style.display = 'none';
   myNickname = nick;
   switchScreen('screen-rooms');
 }
@@ -496,6 +567,12 @@ socket.on('room_list', (list) => {
 });
 
 socket.on('error_msg', m => alert(m));
+// 같은 방에 같은 닉네임이 있으면 닉네임 입력 화면으로 돌려보냄
+socket.on('name_taken', m => {
+  const err = document.getElementById('nickname-error');
+  err.innerText = m; err.style.display = 'block';
+  switchScreen('screen-home');
+});
 
 socket.on('room_joined', ({ roomId, room, myId: assignedId }) => {
   myId = assignedId; currentRoom = room;
@@ -505,6 +582,16 @@ socket.on('room_joined', ({ roomId, room, myId: assignedId }) => {
   updateRoomUI();
 });
 socket.on('room_update', (room) => { currentRoom = room; updateRoomUI(); });
+
+// 누군가 나가면 오른쪽에 빨간 글씨로 알림
+socket.on('player_left', ({ name }) => {
+  const box = document.getElementById('leave-toasts');
+  const t = document.createElement('div');
+  t.className = 'leave-toast';
+  t.textContent = `${name}님이 나갔습니다.`;
+  box.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(30px)'; setTimeout(() => t.remove(), 500); }, 4000);
+});
 
 socket.on('player_moved', ({ id, x, y, dir, isMoving }) => {
   if (currentRoom && currentRoom.players[id]) {
@@ -522,6 +609,7 @@ socket.on('player_vented', ({ id, inVent, x, y, ventId }) => {
   if (ventId && inVent !== was) {            // 벤트 뚜껑 + 캐릭터 들어가고 나오는 모션 (다른 사람 화면에도)
     ventLids[ventId] = inVent ? 25 : 20;
     if (id !== myId) p.ventAnim = inVent ? 25 : -20;
+    playSfxAt('vent', p.x, p.y, SOUND_RANGE); // 들어갈 때/나올 때 모두 거리 비례 소리
   }
 });
 socket.on('player_visual', ({ id, key }) => {
@@ -562,17 +650,33 @@ socket.on('game_started', ({ players, imposterCount }) => {
 });
 
 socket.on('sabotage_updated', (s) => {
+  const prevType = sabotageState.type, prevDoors = sabotageState.doors || [];
   sabotageState = s;
   doorReadyLocal = {};
   Object.entries(s.dcd || {}).forEach(([k, ms]) => { doorReadyLocal[k] = Date.now() + ms; });
   closedSegs = [];
-  (s.doors || []).forEach(k => DOOR_DEFS[k] && DOOR_DEFS[k].s.forEach(a =>
-    closedSegs.push({ p1: { x: a[0] * REF_SX, y: a[1] * REF_SY }, p2: { x: a[2] * REF_SX, y: a[3] * REF_SY } })));
+  (s.doors || []).forEach(k => DOOR_DEFS[k] && DOOR_DEFS[k].s.forEach(a => {
+    const dx = a[2] - a[0], dy = a[3] - a[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+    closedSegs.push({
+      p1: { x: (a[0] - ux * DOOR_EXT) * REF_SX, y: (a[1] - uy * DOOR_EXT) * REF_SY },
+      p2: { x: (a[2] + ux * DOOR_EXT) * REF_SX, y: (a[3] + uy * DOOR_EXT) * REF_SY }
+    });
+  }));
   const b = document.getElementById('sab-banner');
   const L = { reactor: '☢️ 원자로 멜트다운', o2: '💨 산소 공급 차단', lights: '💡 전등 고장', comms: '📡 통신 장애' };
   if (s.type) { b.style.display = 'block'; b.innerText = L[s.type] + (s.type === 'lights' || s.type === 'comms' ? '' : ` ${s.left}초`); }
   else b.style.display = 'none';
   document.getElementById('sab-flash').style.display = (critSab() && currentRoom && currentRoom.state === 'PLAYING') ? 'block' : 'none';
+
+  // 소리: 문 닫힘/열림(거리 비례), 방해공작 시작
+  const newDoors = s.doors || [];
+  if (currentRoom && currentRoom.state === 'PLAYING') {
+    newDoors.filter(k => !prevDoors.includes(k)).forEach(k => { const p = doorPos(k); playSfxAt('doorclose', p.x, p.y, DOOR_SOUND_RANGE); });
+    prevDoors.filter(k => !newDoors.includes(k)).forEach(k => { const p = doorPos(k); playSfxAt('dooropen', p.x, p.y, DOOR_SOUND_RANGE); });
+    if (s.type && s.type !== prevType && !critSab()) playSfx('sabotage', 0.8); // 전등/통신은 한 번만
+  }
+  syncSabLoop(); // 원자로/산소는 해결될 때까지 반복
+
   TaskSys.onSab();
   updateSabIcons();
 });
@@ -581,22 +685,35 @@ socket.on('cctv_count', n => { cctvCount = n; });
 socket.on('player_killed', ({ victimId, killerId, body }) => {
   bodies.push(body);
   if (currentRoom && currentRoom.players[victimId]) { currentRoom.players[victimId].isAlive = false; currentRoom.players[victimId].visual = null; }
+  playSfxAt('kill', body.x, body.y, SOUND_RANGE); // 가까울수록 크게
   if (victimId === myId) { TaskSys.close(); closeAdminMap(); closeCams(); }
 });
 
-// 회의 시작 연출 (2초)
-socket.on('meeting_intro', ({ callerName, callerColor, type }) => {
+// 회의 시작 연출 (2.5초) — 시체 신고면 "시체 발견!" + 발견된 시체 + 발견한 사람
+socket.on('meeting_intro', ({ callerName, callerColor, type, bodyColor }) => {
   TaskSys.close(); closeAdminMap(); closeCams();
   document.getElementById('sab-flash').style.display = 'none';
   currentRoom.state = 'MEETING';
   bodies = []; isVented = false; currentVentId = null;
   hideVentNav(); resetKeys(); closeSabotageModal();
+  setWalkSound(false); syncSabLoop();
   document.getElementById('map-modal').style.display = 'none';
+  const isReport = type === 'REPORT';
   const dot = `<span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${callerColor};border:2px solid #fff;vertical-align:middle;margin-right:8px;"></span>`;
-  document.getElementById('mi-title').innerText = type === 'REPORT' ? 'DEAD BODY REPORTED' : 'EMERGENCY MEETING';
-  document.getElementById('mi-sub').innerHTML = `${dot}${escapeHtml(callerName)} ${type === 'REPORT' ? '이(가) 시체를 발견했습니다!' : '이(가) 긴급회의를 소집했습니다!'}`;
+  document.getElementById('mi-title').innerText = isReport ? '시체 발견!' : 'EMERGENCY MEETING';
+  const bc = document.getElementById('mi-body-canvas');
+  if (isReport && bodyColor) {
+    const g = bc.getContext('2d');
+    g.clearRect(0, 0, bc.width, bc.height);
+    g.save(); g.translate(bc.width / 2, bc.height / 2 + 6); g.scale(2.8, 2.8);
+    drawDeadBody(g, 0, 0, bodyColor);
+    g.restore();
+    bc.style.display = 'block';
+  } else bc.style.display = 'none';
+  document.getElementById('mi-sub').innerHTML = `${dot}${escapeHtml(callerName)}${isReport ? '이(가) 발견함' : '이(가) 긴급회의를 소집했습니다!'}`;
   document.getElementById('meeting-intro-screen').style.display = 'flex';
-  setTimeout(() => { document.getElementById('meeting-intro-screen').style.display = 'none'; }, 2000);
+  playSfx(isReport ? 'report' : 'emergency', 1);
+  setTimeout(() => { document.getElementById('meeting-intro-screen').style.display = 'none'; }, 2500);
 });
 
 socket.on('meeting_started', ({ players, phase, timeLeft }) => {
@@ -622,9 +739,12 @@ socket.on('meeting_started', ({ players, phase, timeLeft }) => {
     card.id = `voter-card-${p.id}`;
     card.className = `voter-card ${p.isAlive ? '' : 'dead'} locked`;
     card.innerHTML = `
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="width:20px; height:20px; border-radius:50%; background:${p.color}; border:2px solid #000;"></div>
-        <span style="font-size:15px; font-weight:bold; color:#0f172a;">${escapeHtml(p.name)} ${p.id === myId ? '(나)' : ''}</span>
+      <div class="vc-left">
+        <div class="vc-dotwrap">
+          <div class="vc-dot" style="background:${p.color};"></div>
+          ${p.isAlive ? '' : '<span class="dead-x">✕</span>'}
+        </div>
+        <span class="vc-name">${escapeHtml(p.name)}${p.id === myId ? ' (나)' : ''}</span>
         <span id="voted-badge-${p.id}" class="voted-badge" style="display:none;">투표완료</span>
       </div>
       <div id="voted-by-${p.id}" class="voted-by-container"></div>`;
@@ -665,16 +785,31 @@ socket.on('meeting_reveal', ({ votes }) => {
     else { const c = document.getElementById(`voted-by-${targetId}`); if (c) c.appendChild(marker); }
   }
 });
+
+// 글자가 한 글자씩 타이핑되며 text.mp3 가 같이 나옴
+let typeToken = 0;
+function typeText(el, full, charMs = 65, lineMs = 550) {
+  const token = ++typeToken;
+  el.textContent = '';
+  let i = 0;
+  (function step() {
+    if (token !== typeToken || i >= full.length) return;
+    const ch = full[i++];
+    el.textContent = full.slice(0, i);
+    if (ch.trim()) playSfx('text', 0.5);
+    setTimeout(step, ch === '\n' ? lineMs : charMs);
+  })();
+}
 socket.on('meeting_ejection', ({ ejectedPlayer, isTie, reason, impLeft }) => {
   document.getElementById('meeting-modal').style.display = 'none';
   const screen = document.getElementById('ejection-screen');
   const text = document.getElementById('ejection-text');
-  if (isTie || !ejectedPlayer) text.innerText = reason === 'TIE' ? '동점으로 아무도 방출되지 않았습니다.' : '건너뛰기로 아무도 방출되지 않았습니다.';
-  else text.innerText = `${ejectedPlayer.name} 은(는) ${ejectedPlayer.role === 'IMPOSTOR' ? '임포스터였습니다.' : '임포스터가 아니었습니다.'}`;
-  text.style.whiteSpace = 'pre-line';
-  text.innerText += `\n남은 임포스터 ${impLeft}명`;
+  let line1;
+  if (isTie || !ejectedPlayer) line1 = reason === 'TIE' ? '동점으로 아무도 방출되지 않았습니다.' : '건너뛰기로 아무도 방출되지 않았습니다.';
+  else line1 = `${ejectedPlayer.name} 은(는) ${ejectedPlayer.role === 'IMPOSTOR' ? '임포스터였습니다.' : '임포스터가 아니었습니다.'}`;
   screen.style.display = 'flex';
-  setTimeout(() => { screen.style.display = 'none'; }, 4000);
+  typeText(text, `${line1}\n남은 임포스터 ${impLeft}명`);
+  setTimeout(() => { screen.style.display = 'none'; }, 4800);
 });
 socket.on('resume_game', ({ players }) => {
   currentRoom.players = players;
@@ -684,11 +819,14 @@ socket.on('resume_game', ({ players }) => {
   socket.emit('player_move', { x: s.x, y: s.y, dir: localPlayer.dir, isMoving: false });
   lastKillStamp = Date.now();
   resetKeys();
+  syncSabLoop();
 });
 socket.on('game_over', ({ winner, reason, players }) => {
   TaskSys.close(); closeAdminMap(); closeCams(); closeSabotageModal();
+  setWalkSound(false); sabLoop.pause();
   ['meeting-modal', 'map-modal', 'ejection-screen', 'meeting-intro-screen', 'sab-flash'].forEach(id => document.getElementById(id).style.display = 'none');
   const win = role === winner;
+  playSfx(win ? 'win' : 'lose', 1);
   const t = document.getElementById('go-title');
   t.innerText = win ? 'VICTORY' : 'DEFEAT';
   t.style.color = win ? '#facc15' : '#ef4444';
@@ -769,6 +907,13 @@ const sabReady = () => !sabotageState.type && (sabotageState.cd || 0) <= 0;
 const doorRem = (k) => Math.max(0, Math.ceil(((doorReadyLocal[k] || 0) - Date.now()) / 1000));
 const doorReady = (k) => doorRem(k) <= 0 && !(sabotageState.doors || []).includes(k) && !critSab();
 const anyDoorReady = () => Object.keys(DOOR_DEFS).some(doorReady);
+// 문 소리 위치: 그 방 문들의 중심
+function doorPos(k) {
+  const segs = DOOR_DEFS[k].s;
+  let x = 0, y = 0;
+  segs.forEach(a => { x += (a[0] + a[2]) / 2; y += (a[1] + a[3]) / 2; });
+  return { x: x / segs.length * REF_SX, y: y / segs.length * REF_SY };
+}
 const ADMIN_MAP = { x: 1745 * REF_SX, y: 838 * REF_SY };
 function nearAdmin() {
   const me = currentRoom && currentRoom.players[myId];
@@ -787,10 +932,10 @@ function triggerUse() {
   else if (nearAdmin()) openAdminMap();
   else if (nearSec()) openCams();
 }
-function triggerSabotageOrUse() {
-  if (TaskSys.tryUse()) return;
-  if (nearTable() || nearAdmin() || nearSec()) triggerUse();
-  else if (sabReady() || anyDoorReady()) openSabotageModal();
+// 임포스터: 사보타지 버튼은 사보타지 전용, USE 버튼은 킬 버튼 옆에 따로 있음
+function triggerSabotage() {
+  if (role !== 'IMPOSTOR') return;
+  if (sabReady() || anyDoorReady()) openSabotageModal();
 }
 
 function triggerVent() {
@@ -962,17 +1107,18 @@ function drawCamLights(c) {
     c.beginPath(); c.arc(cam.x * REF_SX, cam.y * REF_SY - 40, 12, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
   });
 }
-// 원자로/산소: 수리 위치를 가리키는 빨강-노랑 화살표
+// 원자로/산소: 수리 위치를 가리키는 빨강-노랑 화살표 (화면 비율에 맞춰 위치 계산)
 function drawSabArrows() {
   if (!critSab()) return;
   const me = currentRoom.players[myId];
   if (!me || !me.isAlive) return;
-  const cw = canvas.width, ch = canvas.height, R = Math.min(cw, ch) / 2 - 70;
+  const cw = canvas.width, ch = canvas.height, sc = viewScale();
+  const R = Math.min(VIEW_W * sc, VIEW_H * sc) / 2 - 70;
   const col = (Math.floor(Date.now() / 350) % 2) ? '#ef4444' : '#facc15';
   TaskSys.sabTargets().forEach(w => {
     const dx = w.x - localPlayer.x, dy = w.y - localPlayer.y, d = Math.hypot(dx, dy);
     if (d < 130) return;
-    const a = Math.atan2(dy, dx), r = Math.max(70, Math.min(R, d - 80));
+    const a = Math.atan2(dy, dx), r = Math.max(70, Math.min(R, d * sc - 80));
     ctx.save(); ctx.translate(cw / 2 + Math.cos(a) * r, ch / 2 + Math.sin(a) * r); ctx.rotate(a);
     ctx.shadowColor = col; ctx.shadowBlur = 14; ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(34, 0); ctx.lineTo(-18, -24); ctx.lineTo(-6, 0); ctx.lineTo(-18, 24); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -1206,6 +1352,28 @@ function renderMinimap() {
   mCtx.beginPath(); mCtx.arc(localPlayer.x * scaleX, localPlayer.y * scaleY, 7, 0, Math.PI * 2); mCtx.fill();
 }
 
+// 시야 밖을 완전히 가리는 안개 (시야 다각형 안쪽만 구멍을 뚫음)
+function drawFog(sc, radius, poly) {
+  const cw = maskCanvas.width, ch = maskCanvas.height;
+  mctx.save();
+  mctx.setTransform(1, 0, 0, 1, 0, 0);
+  mctx.clearRect(0, 0, cw, ch);
+  mctx.globalCompositeOperation = 'source-over';
+  mctx.fillStyle = FOG_COLOR;
+  mctx.fillRect(0, 0, cw, ch);
+  mctx.globalCompositeOperation = 'destination-out';
+  mctx.setTransform(sc, 0, 0, sc, cw / 2 - localPlayer.x * sc, ch / 2 - localPlayer.y * sc);
+  const fade = mctx.createRadialGradient(localPlayer.x, localPlayer.y, radius * 0.85, localPlayer.x, localPlayer.y, radius);
+  fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+  mctx.fillStyle = fade;
+  mctx.beginPath();
+  mctx.moveTo(poly[0].x, poly[0].y);
+  for (let i = 1; i < poly.length; i++) mctx.lineTo(poly[i].x, poly[i].y);
+  mctx.closePath(); mctx.fill();
+  mctx.restore();
+  ctx.drawImage(maskCanvas, 0, 0);
+}
+
 // e.code 기반: 한글 입력/CapsLock/Shift 상태에서도 WASD·방향키 정상 동작
 const KEYMAP = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', ArrowUp: 'ArrowUp', ArrowLeft: 'ArrowLeft', ArrowDown: 'ArrowDown', ArrowRight: 'ArrowRight' };
 window.addEventListener('keydown', (e) => {
@@ -1277,6 +1445,10 @@ function gameLoop(ts) {
   }
   localPlayer.isMoving = moving;
 
+  // 내 발소리 (유령은 소리 없음)
+  const meW = currentRoom && currentRoom.players[myId];
+  setWalkSound(moving && !!meW && meW.isAlive);
+
   // 위치 전송: 이동 중엔 20Hz, 멈추는 순간엔 최종 위치 1회
   const nowMs = performance.now();
   if (currentRoom && (moving ? nowMs - lastSend >= 50 : wasMoving)) {
@@ -1305,21 +1477,15 @@ function gameLoop(ts) {
     const nearUse = nearTable() || nearAdmin() || nearSec() || !!TaskSys.nearest();
 
     if (role === 'IMPOSTOR') {
-      useBtn.style.display = 'none';
+      // 사보타지 버튼 (항상 사보타지 모양)
       sabBtn.style.display = 'block';
-      if (nearUse && !isVented) {
-        sabBtn.classList.add('btn-use'); sabBtn.classList.remove('btn-sabotage');
-        sabBtn.classList.add('active'); sabOv.style.display = 'none';
-      } else {
-        sabBtn.classList.add('btn-sabotage'); sabBtn.classList.remove('btn-use');
-        if (sabReady() || anyDoorReady()) { sabBtn.classList.add('active'); sabOv.style.display = 'none'; }
-        else {
-          sabBtn.classList.remove('active');
-          const cands = Object.keys(DOOR_DEFS).filter(k => !(sabotageState.doors || []).includes(k)).map(doorRem);
-          if (!sabotageState.type) cands.push(sabCdSec());
-          const rem = cands.length ? Math.min(...cands) : 0;
-          if (rem > 0) { sabOv.style.display = 'flex'; sabOv.innerText = rem; } else sabOv.style.display = 'none';
-        }
+      if (sabReady() || anyDoorReady()) { sabBtn.classList.add('active'); sabOv.style.display = 'none'; }
+      else {
+        sabBtn.classList.remove('active');
+        const cands = Object.keys(DOOR_DEFS).filter(k => !(sabotageState.doors || []).includes(k)).map(doorRem);
+        if (!sabotageState.type) cands.push(sabCdSec());
+        const rem = cands.length ? Math.min(...cands) : 0;
+        if (rem > 0) { sabOv.style.display = 'flex'; sabOv.innerText = rem; } else sabOv.style.display = 'none';
       }
 
       if (alive) {
@@ -1339,9 +1505,11 @@ function gameLoop(ts) {
       }
     } else {
       killBtn.style.display = 'none'; sabBtn.style.display = 'none'; ventBtn.style.display = 'none';
-      useBtn.style.display = 'block';
-      if (nearUse) useBtn.classList.add('active'); else useBtn.classList.remove('active');
     }
+
+    // USE 버튼: 크루원/임포스터 모두 표시 (임포스터는 킬 버튼 바로 옆)
+    useBtn.style.display = 'block';
+    if (nearUse && !isVented) useBtn.classList.add('active'); else useBtn.classList.remove('active');
 
     let canReport = false;
     bodies.forEach(b => {
@@ -1355,10 +1523,10 @@ function gameLoop(ts) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (currentRoom) {
-    const camX = canvas.width / 2 - localPlayer.x;
-    const camY = canvas.height / 2 - localPlayer.y;
+    const sc = viewScale();
+    let fogPoly = null, fogRadius = 0;
     ctx.save();
-    ctx.translate(camX, camY);
+    applyCam(ctx, sc); // 어떤 기기든 같은 범위(VIEW_W x VIEW_H)만 보이고, 남는 부분은 검은 띠
 
     if (currentRoom.state === 'LOBBY') {
       if (waitShipImg.complete && waitShipImg.naturalWidth > 0) {
@@ -1377,12 +1545,12 @@ function gameLoop(ts) {
       REAL_SKELD_VENTS.forEach(v => drawVent(ctx, v));
       drawDoors(ctx);
       drawCamLights(ctx);
-      TaskSys.draw(ctx, animTick);
 
       const me = currentRoom.players[myId];
       const meDead = !!me && !me.isAlive;
       const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 400 : 800);
       const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, visionRadius);
+      fogPoly = visiblePolygon; fogRadius = visionRadius;
 
       bodies.forEach(b => {
         if (role === 'IMPOSTOR' || meDead || (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) <= visionRadius && isPointInPolygon(b, visiblePolygon))) drawDeadBody(ctx, b.x, b.y, b.color);
@@ -1398,23 +1566,6 @@ function gameLoop(ts) {
           drawCrewmate(ctx, p.x, p.y, p.color, p.name, false, p.dir || 1, p.isMoving, p.isAlive, p.inVent, p.ventAnim || 0, animTick);
         }
       });
-
-      // 안개
-      mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-      mctx.save();
-      mctx.globalCompositeOperation = 'source-over';
-      mctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
-      mctx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-      mctx.globalCompositeOperation = 'destination-out';
-      const scrX = localPlayer.x + camX, scrY = localPlayer.y + camY;
-      const fade = mctx.createRadialGradient(scrX, scrY, visionRadius * 0.85, scrX, scrY, visionRadius);
-      fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
-      mctx.fillStyle = fade;
-      mctx.beginPath();
-      mctx.moveTo(visiblePolygon[0].x + camX, visiblePolygon[0].y + camY);
-      for (let i = 1; i < visiblePolygon.length; i++) mctx.lineTo(visiblePolygon[i].x + camX, visiblePolygon[i].y + camY);
-      mctx.closePath(); mctx.fill();
-      mctx.restore();
     }
 
     const me = currentRoom.players[myId];
@@ -1426,10 +1577,9 @@ function gameLoop(ts) {
 
     if (currentRoom.state === 'PLAYING') {
       const m0 = currentRoom.players[myId];
-      if (!(m0 && !m0.isAlive)) ctx.drawImage(maskCanvas, 0, 0); // 유령은 안개 없음
-      ctx.save(); ctx.translate(camX, camY);                       // 열리는 벤트는 어두운 곳/벽 너머에서도 보이게
-      REAL_SKELD_VENTS.forEach(v => { if ((ventLids[v.id] || 0) > 0) drawVent(ctx, v); });
-      ctx.restore();
+      if (!(m0 && !m0.isAlive) && fogPoly) drawFog(sc, fogRadius, fogPoly); // 유령은 안개 없음
+      // 미션/수리 위치 마커는 안개 위에 표시 (맵 뒤쪽은 안 보이고 마커만 보임)
+      ctx.save(); applyCam(ctx, sc); TaskSys.draw(ctx, animTick); ctx.restore();
       drawSabArrows();
     }
   }
