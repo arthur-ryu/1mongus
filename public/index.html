@@ -35,6 +35,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .hud-circle-btn { width: clamp(44px, 9vh, 58px); height: clamp(44px, 9vh, 58px); cursor: pointer; border-radius: 50%; background: #fff; border: 3px solid #64748b; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: transform .1s; font-size: 26px; }
 .hud-circle-btn:active { transform: scale(.92); }
 .hud-map-btn { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/map.png'); background-size: contain; background-repeat: no-repeat; background-position: center; }
+.hud-exit-btn { width: 76px; border-radius: 16px; padding: 0 8px; background: #ef4444; color: #fff; border-color: #7f1d1d; font-size: 14px; font-weight: 700; }
 
 .action-btn-group { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; z-index: 60; align-items: flex-end; }
 .action-btn-row { display: flex; gap: 14px; justify-content: flex-end; }
@@ -51,10 +52,10 @@ canvas { display: block; width: 100%; height: 100%; }
 #sab-banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: none; padding: 8px 22px; background: #ef4444; color: #fff; border: 3px solid #0f172a; border-radius: 20px; font-size: 18px; z-index: 62; pointer-events: none; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .6; } }
 
-/* 누가 나갔는지 오른쪽에 뜨는 빨간 알림 */
-#leave-toasts { position: fixed; top: clamp(70px, 14vh, 92px); right: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 2000; pointer-events: none; }
-.leave-toast { color: #ef4444; font-size: clamp(14px, 2.8vh, 22px); font-weight: bold; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff, 0 3px 8px rgba(0,0,0,.35); transition: opacity .5s, transform .5s; animation: toastIn .25s ease-out; }
-@keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+/* 누가 나갔는지 왼쪽에 뜨는 빨간 알림 */
+#leave-toasts { position: fixed; top: clamp(70px, 14vh, 92px); left: 16px; right: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; z-index: 2000; pointer-events: none; }
+.leave-toast { max-width: min(80vw, 360px); color: #ef4444; font-size: clamp(14px, 2.8vh, 22px); font-weight: bold; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff, 0 3px 8px rgba(0,0,0,.35); transition: opacity .3s, transform .3s; animation: toastIn .25s ease-out; }
+@keyframes toastIn { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
 
 #vent-nav-ui { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 65; }
 .vent-arrow-btn { position: absolute; width: 68px; height: 68px; display: flex; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; transform-origin: center center; }
@@ -201,7 +202,8 @@ canvas { display: block; width: 100%; height: 100%; }
 <div id="canvas-container"><canvas id="game-canvas"></canvas></div>
 
 <div class="top-right-hud" id="top-right-hud">
-  <div class="hud-circle-btn hud-map-btn" onclick="toggleMapModal()"></div>
+  <div class="hud-circle-btn hud-map-btn" onclick="toggleMapModal()" title="지도"></div>
+  <button class="hud-circle-btn hud-exit-btn" onclick="leaveToLobby()" title="방 나가기">나가기</button>
 </div>
 
 <div id="in-game-ui">
@@ -561,6 +563,48 @@ function handleCreateRoom() {
 }
 function joinRoom(id) { socket.emit('join_room', { roomId: id, playerName: myNickname }); }
 function handleStartGame() { socket.emit('start_game'); }
+function leaveToLobby() {
+  if (!currentRoom) {
+    document.getElementById('in-game-ui').style.display = 'none';
+    document.getElementById('top-right-hud').style.display = 'none';
+    switchScreen('screen-rooms');
+    return;
+  }
+
+  // 서버에서 방 멤버를 제거하기 전에 열려 있는 인터페이스를 정리합니다.
+  TaskSys.close();
+  closeAdminMap();
+  closeCams();
+  closeSabotageModal();
+  resetKeys();
+  socket.emit('leave_room');
+
+  setWalkSound(false);
+  currentRoom = null;
+  role = 'CREWMATE';
+  myId = null;
+  bodies = [];
+  isVented = false;
+  currentVentId = null;
+  ventTravel = null;
+  sabotageState = { type: null, doors: [], fixed: [], sw: [] };
+  adminOpen = false;
+  camOpen = false;
+  hideVentNav();
+  syncSabLoop();
+
+  ['map-modal', 'admin-modal', 'cam-modal', 'sabotage-modal', 'meeting-modal', 'chat-modal',
+   'meeting-intro-screen', 'role-reveal-screen', 'ejection-screen', 'gameover-screen'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('sab-flash').style.display = 'none';
+  document.getElementById('start-btn-in-room').style.display = 'none';
+  document.getElementById('top-right-hud').style.display = 'none';
+  document.getElementById('in-game-ui').style.display = 'none';
+  document.getElementById('leave-toasts').innerHTML = '';
+  switchScreen('screen-rooms');
+}
 
 socket.on('room_list', (list) => {
   const container = document.getElementById('room-list-container');
@@ -592,14 +636,18 @@ socket.on('room_joined', ({ roomId, room, myId: assignedId }) => {
 });
 socket.on('room_update', (room) => { currentRoom = room; updateRoomUI(); });
 
-// 누군가 나가면 오른쪽에 빨간 글씨로 알림
+// 누군가 나가면 왼쪽에 빨간 글씨로 알림 (3초 후 사라짐)
 socket.on('player_left', ({ name }) => {
   const box = document.getElementById('leave-toasts');
   const t = document.createElement('div');
   t.className = 'leave-toast';
   t.textContent = `${name}님이 나갔습니다.`;
   box.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(30px)'; setTimeout(() => t.remove(), 500); }, 4000);
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-20px)';
+    setTimeout(() => t.remove(), 300);
+  }, 2700);
 });
 
 socket.on('player_moved', ({ id, x, y, dir, isMoving }) => {
@@ -1071,13 +1119,13 @@ function renderAdmin() {
     const r = ROOM_POLYS.find(rm => isPointInPolygon(pos, rm.poly));
     if (!r) return;
     if (!per.has(r)) per.set(r, []);
-    per.get(r).push({ col: p.color });
+    per.get(r).push({ dead: false });
   });
   bodies.forEach(bd => {  // 시체도 표시
     const r = ROOM_POLYS.find(rm => isPointInPolygon(bd, rm.poly));
     if (!r) return;
     if (!per.has(r)) per.set(r, []);
-    per.get(r).push({ col: bd.color, dead: true });
+    per.get(r).push({ dead: true });
   });
   per.forEach((items, r) => {
     const cx = r.cx / REF_W * c.width, cy = r.cy / REF_H * c.height, step = 24, perRow = 4;
@@ -1085,8 +1133,10 @@ function renderAdmin() {
       const row = Math.floor(i / perRow), inRow = Math.min(perRow, items.length - row * perRow), idx = i % perRow;
       const x = cx + (idx - (inRow - 1) / 2) * step, y = cy + row * step;
       g.beginPath(); g.arc(x, y, 10, 0, Math.PI * 2);
-      g.fillStyle = it.col; g.fill(); g.lineWidth = 3; g.strokeStyle = it.dead ? '#ef4444' : '#000'; g.stroke();
-      if (it.dead) { g.fillStyle = '#fff'; g.font = '13px sans-serif'; g.textAlign = 'center'; g.fillText('☠', x, y + 5); }
+      // 관리자실 지도에서는 플레이어의 고유 색상을 숨기고 무채색으로만 표시
+      g.fillStyle = it.dead ? '#9ca3af' : '#f3f4f6'; g.fill();
+      g.lineWidth = 2; g.strokeStyle = '#374151'; g.stroke();
+      if (it.dead) { g.fillStyle = '#374151'; g.font = '13px sans-serif'; g.textAlign = 'center'; g.fillText('☠', x, y + 5); }
     });
   });
 }
@@ -1636,7 +1686,7 @@ function gameLoop(ts) {
 
       const me = currentRoom.players[myId];
       const meDead = !!me && !me.isAlive;
-      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 250 : 800);
+      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 150 : 800);
       const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, Math.min(visionRadius, 1000)); // 화면 밖은 계산 안 함
       fogPoly = visiblePolygon; fogRadius = visionRadius;
 
