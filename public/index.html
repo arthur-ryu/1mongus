@@ -115,6 +115,8 @@ canvas { display: block; width: 100%; height: 100%; }
 .chat-row { display: flex; flex-direction: column; width: 100%; }
 .chat-row.mine { align-items: flex-end; }
 .chat-row.other { align-items: flex-start; }
+.chat-row.system { align-items: center; }
+.chat-system-message { max-width: 90%; padding: 6px 12px; border-radius: 12px; background: #e2e8f0; color: #475569; font-size: 12px; font-weight: bold; text-align: center; }
 .chat-sender-info { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 3px; }
 .chat-bubble { max-width: 75%; padding: 8px 14px; border-radius: 16px; font-size: 14px; word-break: break-all; white-space: pre-wrap; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,.06); }
 .chat-bubble.mine { background: #0284c7; color: #fff; border-bottom-right-radius: 4px; }
@@ -681,7 +683,7 @@ socket.on('sabotage_updated', (s) => {
   if (currentRoom && currentRoom.state === 'PLAYING') {
     newDoors.filter(k => !prevDoors.includes(k)).forEach(k => { const p = doorPos(k); playSfxAt('doorclose', p.x, p.y, DOOR_SOUND_RANGE); });
     prevDoors.filter(k => !newDoors.includes(k)).forEach(k => { const p = doorPos(k); playSfxAt('dooropen', p.x, p.y, DOOR_SOUND_RANGE); });
-    if (s.type && s.type !== prevType && !critSab()) playSfx('sabotage', 0.8); // 전등/통신은 한 번만
+    if (s.type && s.type !== prevType && s.type !== 'lights' && !critSab()) playSfx('sabotage', 0.8); // 전등 고장 시작 시 효과음 제외
   }
   syncSabLoop(); // 원자로/산소는 해결될 때까지 반복
 
@@ -774,9 +776,13 @@ socket.on('meeting_phase_change', ({ phase, timeLeft }) => {
 socket.on('meeting_timer_tick', ({ phase, timeLeft }) => {
   document.getElementById('meeting-timer-box').innerText = `${phase === 'DISCUSS' ? '토론 시간' : '투표 시간'}: ${timeLeft}s`;
 });
-socket.on('vote_status', ({ voterId }) => {
+socket.on('vote_status', ({ voterId, voterName }) => {
   const badge = document.getElementById(`voted-badge-${voterId}`);
   if (badge) badge.style.display = 'inline-block';
+
+  const player = currentRoom && currentRoom.players && currentRoom.players[voterId];
+  const name = voterName || (player && player.name) || '누군가';
+  appendMeetingSystemMessage(`${name}님이 투표했습니다.`);
 });
 socket.on('meeting_reveal', ({ votes }) => {
   document.getElementById('meeting-timer-box').innerText = `투표 집계 중...`;
@@ -834,7 +840,8 @@ socket.on('game_over', ({ winner, reason, players }) => {
   setWalkSound(false); sabLoop.pause();
   ['meeting-modal', 'map-modal', 'ejection-screen', 'meeting-intro-screen', 'sab-flash'].forEach(id => document.getElementById(id).style.display = 'none');
   const win = role === winner;
-  playSfx(win ? 'win' : 'lose', 1);
+  // 승리 효과음은 내 역할이 아닌 실제 승리 팀 기준으로 재생
+  playSfx(winner === 'IMPOSTOR' ? 'lose' : 'win', 1);
   const t = document.getElementById('go-title');
   t.innerText = win ? 'VICTORY' : 'DEFEAT';
   t.style.color = win ? '#facc15' : '#ef4444';
@@ -888,6 +895,18 @@ function sendMeetingChat() {
   socket.emit('meeting_chat', text);
   input.value = '';
 }
+function appendMeetingSystemMessage(message) {
+  const log = document.getElementById('meeting-chat-log');
+  const row = document.createElement('div');
+  row.className = 'chat-row system';
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-system-message';
+  bubble.textContent = message;
+  row.appendChild(bubble);
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
 socket.on('new_meeting_chat', ({ senderId, senderName, senderColor, isAlive, hasVoted, text }) => {
   const log = document.getElementById('meeting-chat-log');
   const isMine = (senderId === myId);
@@ -1617,7 +1636,7 @@ function gameLoop(ts) {
 
       const me = currentRoom.players[myId];
       const meDead = !!me && !me.isAlive;
-      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 400 : 800);
+      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 250 : 800);
       const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, Math.min(visionRadius, 1000)); // 화면 밖은 계산 안 함
       fogPoly = visiblePolygon; fogRadius = visionRadius;
 
