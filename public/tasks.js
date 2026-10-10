@@ -9,16 +9,16 @@ const TASK_DEFS = {
     S('카페테리아', 1200, 300), S('관리실', 1630, 905), S('전기실', 1100, 1000),
     S('조종실', 2380, 520), S('보안실', 800, 530), S('창고', 1500, 1250)], 3) },
   swipe: { name: '카드 긁기', type: 'swipe', stages: () => [S('관리실', 1840, 770)] },
-  upload: { name: '데이터 업로드', type: 'data', opts: { sec: 4, label: ['다운로드', '업로드'] }, stages: r => [
+  upload: { name: '데이터 업로드', type: 'data', opts: { sec: 8, label: ['다운로드', '업로드'] }, stages: r => [
     pick(r, [S('카페테리아', 1730, 395), S('무기고', 1960, 190), S('조종실', 2380, 720), S('통신실', 1800, 1180), S('전기실', 1190, 800)], 1)[0],
     S('관리실', 1700, 760)] },
-  garbage: { name: '쓰레기 비우기', type: 'hold', opts: { sec: 3 }, stages: r => pick(r, [
+  garbage: { name: '쓰레기 비우기', type: 'hold', opts: { sec: 4 }, stages: r => pick(r, [
     S('카페테리아', 1600, 590), S('산소실', 1900, 600), S('창고', 1420, 900)], 1) },
   filter: { name: '산소 필터 청소', type: 'sequence', opts: { count: 6, ordered: false }, stages: () => [S('산소실', 1820, 520)] },
   align: { name: '엔진 출력 정렬', type: 'needle', opts: { count: 1 }, stages: r => pick(r, [
     S('위쪽 엔진', 640, 330), S('아래쪽 엔진', 640, 1000)], 1) },
   calibrate: { name: '분배기 보정', type: 'needle', opts: { count: 3 }, stages: () => [S('전기실', 1000, 900)] },
-  divert: { name: '전력 우회', type: 'data', opts: { sec: 1, label: ['스위치 켜기', '스위치 켜기'] }, stages: r => [
+  divert: { name: '전력 우회', type: 'data', opts: { sec: 2, label: ['스위치 켜기', '스위치 켜기'] }, stages: r => [
     S('전기실', 1170, 790),
     pick(r, [S('무기고', 2000, 200), S('쉴드', 2000, 1000), S('조종실', 2420, 600), S('통신실', 1700, 1180),
       S('산소실', 1820, 520), S('보안실', 780, 650)], 1)[0]] },
@@ -26,11 +26,11 @@ const TASK_DEFS = {
   asteroids: { name: '소행성 파괴', type: 'sequence', opts: { count: 10, ordered: false }, stages: () => [S('무기고', 1990, 280)] },
   chart: { name: '항로 설정', type: 'sequence', opts: { count: 4, ordered: true }, stages: () => [S('조종실', 2480, 560)] },
   steer: { name: '조향 안정화', type: 'needle', opts: { count: 1 }, stages: () => [S('조종실', 2500, 690)] },
-  sample: { name: '샘플 검사', type: 'data', opts: { sec: 6, label: ['검사 시작'] }, stages: () => [S('의무실', 1000, 480)] },
-  scan: { name: '스캔 제출', type: 'data', opts: { sec: 5, label: ['스캔 시작'] }, stages: () => [S('의무실', 1085, 640)] },
+  sample: { name: '샘플 검사', type: 'data', opts: { sec: 7, label: ['검사 시작'] }, stages: () => [S('의무실', 1000, 480)] },
+  scan: { name: '스캔 제출', type: 'data', opts: { sec: 6, label: ['스캔 시작'] }, stages: () => [S('의무실', 1085, 640)] },
   reactor: { name: '원자로 시동', type: 'memory', stages: () => [S('원자로', 330, 650)] },
   manifold: { name: '매니폴드 잠금 해제', type: 'sequence', opts: { count: 10, ordered: true }, stages: () => [S('원자로', 280, 700)] },
-  fuel: { name: '엔진 연료 주입', type: 'hold', opts: { sec: 2 }, stages: () => [
+  fuel: { name: '엔진 연료 주입', type: 'hold', opts: { sec: 3 }, stages: () => [
     S('창고', 1300, 1100), S('위쪽 엔진', 560, 420), S('창고', 1300, 1100), S('아래쪽 엔진', 560, 1100)] }
 };
 
@@ -114,15 +114,63 @@ if (typeof window !== 'undefined') window.TaskSys = (() => {
       b.append(bar, btn);
     },
     memory(b, done) {
-      const C = ['#ef4444', '#3b82f6', '#22c55e', '#eab308'], seq = Array.from({ length: 5 }, () => Math.random() * 4 | 0);
-      const grid = el('div', 'display:grid;grid-template-columns:repeat(2,90px);gap:12px;'); let pos = 0, lock = true;
-      const pads = C.map((c, i) => { const d = el('div', `height:70px;border-radius:12px;border:3px solid #000;background:${c};opacity:.35;cursor:pointer;`);
-        d.onclick = () => { if (lock) return; flash(i);
-          if (i !== seq[pos]) return play(); if (++pos === seq.length) done(); }; grid.appendChild(d); return d; });
-      const flash = i => { pads[i].style.opacity = 1; setTimeout(() => pads[i].style.opacity = .35, 300); };
-      const play = (k = 0) => { lock = true; pos = 0; if (!b.isConnected) return; if (k >= seq.length) { lock = false; return; }
-        setTimeout(() => { flash(seq[k]); setTimeout(() => play(k + 1), 500); }, 300); };
-      b.appendChild(grid); play();
+      const C = ['#ef4444', '#3b82f6', '#22c55e', '#eab308'];
+      const seq = Array.from({ length: 5 }, () => Math.floor(Math.random() * C.length));
+      const grid = el('div', 'display:grid;grid-template-columns:repeat(2,90px);gap:12px;');
+      const hint = el('div', 'min-height:22px;text-align:center;font-size:14px;color:#475569;', '색깔 순서를 기억하세요.');
+      let pos = 0, accepting = false, finished = false;
+      const pads = [];
+      const later = (fn, ms) => setTimeout(() => {
+        // 패널을 닫았거나 미션을 끝낸 뒤에는 예약된 동작을 무시합니다.
+        if (!b.isConnected || finished) return;
+        fn();
+      }, ms);
+      const flash = (i, duration = 300) => {
+        const pad = pads[i];
+        if (!pad) return;
+        pad.style.opacity = '1';
+        later(() => { pad.style.opacity = '.35'; }, duration);
+      };
+      const showSequence = (step = 0) => {
+        if (!b.isConnected || finished) return;
+        accepting = false;
+        if (step === 0) pos = 0;
+        if (step >= seq.length) {
+          accepting = true;
+          hint.innerText = '이제 같은 순서로 눌러주세요!';
+          return;
+        }
+        later(() => {
+          flash(seq[step], 350);
+          later(() => showSequence(step + 1), 560);
+        }, step === 0 ? 350 : 180);
+      };
+      C.forEach((color, i) => {
+        const pad = el('div', `width:90px;height:70px;border-radius:12px;border:3px solid #000;background:${color};opacity:.35;cursor:pointer;touch-action:manipulation;`);
+        pad.setAttribute('role', 'button');
+        pad.setAttribute('aria-label', `색상 ${i + 1}`);
+        pad.onclick = () => {
+          if (!accepting || finished || !b.isConnected) return;
+          flash(i, 180);
+          if (i !== seq[pos]) {
+            accepting = false;
+            hint.innerText = '틀렸어요. 순서를 다시 보여줄게요.';
+            later(() => showSequence(0), 450);
+            return;
+          }
+          pos++;
+          if (pos >= seq.length) {
+            finished = true;
+            accepting = false;
+            hint.innerText = '완료!';
+            done();
+          }
+        };
+        pads.push(pad);
+        grid.appendChild(pad);
+      });
+      b.append(grid, hint);
+      showSequence();
     }
   };
 
