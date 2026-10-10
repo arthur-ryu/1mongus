@@ -34,6 +34,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .top-right-hud { position: absolute; top: 16px; right: 16px; display: none; gap: 12px; z-index: 60; pointer-events: auto; }
 .hud-circle-btn { width: clamp(44px, 9vh, 58px); height: clamp(44px, 9vh, 58px); cursor: pointer; border-radius: 50%; background: #fff; border: 3px solid #64748b; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: transform .1s; font-size: 26px; }
 .hud-circle-btn:active { transform: scale(.92); }
+.hud-exit-btn { width: auto; padding: 0 16px; border-radius: 30px; font-size: clamp(12px, 2.4vh, 16px); color: #ef4444; font-weight: bold; }
 .hud-map-btn { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/map.png'); background-size: contain; background-repeat: no-repeat; background-position: center; }
 
 .action-btn-group { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; z-index: 60; align-items: flex-end; }
@@ -199,7 +200,8 @@ canvas { display: block; width: 100%; height: 100%; }
 <div id="canvas-container"><canvas id="game-canvas"></canvas></div>
 
 <div class="top-right-hud" id="top-right-hud">
-  <div class="hud-circle-btn hud-map-btn" onclick="toggleMapModal()"></div>
+  <div class="hud-circle-btn hud-map-btn" id="hud-map-btn" onclick="toggleMapModal()"></div>
+  <div class="hud-circle-btn hud-exit-btn" onclick="leaveToLobby()">나가기</div>
 </div>
 
 <div id="in-game-ui">
@@ -301,7 +303,7 @@ const skeldMapImg = new Image(); skeldMapImg.src = CDN_BASE + 'The_Skeld_map.png
 const waitShipImg = new Image(); waitShipImg.src = CDN_BASE + 'wait.png';
 
 // ───── 효과음 (CDN_BASE 폴더에 mp3 파일을 올려두면 됩니다) ─────
-const SFX_NAMES = ['among', 'emergency', 'kill', 'lose', 'report', 'sabotage', 'text', 'vent', 'walk', 'win', 'doorclose', 'dooropen'];
+const SFX_NAMES = ['among', 'emergency', 'kill', 'lose', 'report', 'sabotage', 'text', 'vent', 'walk', 'win', 'doorclose', 'dooropen', 'ventmove'];
 const SFX = {};
 SFX_NAMES.forEach(n => { const a = new Audio(CDN_BASE + n + '.mp3'); a.preload = 'auto'; SFX[n] = a; });
 const SOUND_RANGE = 1000;        // kill / vent 소리가 들리는 거리 (월드 좌표)
@@ -334,6 +336,7 @@ function syncSabLoop() {
 let myId = null, myNickname = 'Crew', currentRoom = null, role = 'CREWMATE';
 let bodies = [], killCooldown = 25, lastKillStamp = 0;
 let isVented = false, currentVentId = null, ventAnimTick = 0, ventAnimDir = 1, ventLids = {};
+let ventTravel = null; // 벤트 사이 이동 애니메이션
 let sabotageState = { type: null, doors: [], fixed: [], sw: [] };
 let doorReadyLocal = {}, closedSegs = [], adminOpen = false, camOpen = false, cctvCount = 0, sabIconRefs = [];
 let lastChatTime = 0;
@@ -512,12 +515,13 @@ window.addEventListener('focus', resetKeys);
 document.addEventListener('visibilitychange', resetKeys);
 window.addEventListener('click', () => { window.focus(); });
 
+let renderScale = 1; // 자동 화질 (느리면 해상도를 낮춤)
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const maskCanvas = document.createElement('canvas');
 const mctx = maskCanvas.getContext('2d');
 function resizeCanvas() {
-  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  canvas.width = Math.round(window.innerWidth * renderScale); canvas.height = Math.round(window.innerHeight * renderScale);
   maskCanvas.width = window.innerWidth; maskCanvas.height = window.innerHeight;
 }
 window.addEventListener('resize', resizeCanvas);
@@ -585,6 +589,8 @@ socket.on('room_joined', ({ roomId, room, myId: assignedId }) => {
   localPlayer.x = LOBBY_SPAWN.x; localPlayer.y = LOBBY_SPAWN.y;
   switchScreen(null);
   document.getElementById('in-game-ui').style.display = 'block';
+  document.querySelector('.top-right-hud').style.display = 'flex';
+  document.getElementById('hud-map-btn').style.display = 'none'; // 대기실에서는 나가기 버튼만 보임
   updateRoomUI();
 });
 socket.on('room_update', (room) => { currentRoom = room; updateRoomUI(); });
@@ -640,6 +646,7 @@ socket.on('game_started', ({ players, imposterCount }) => {
   document.getElementById('meeting-chat-log').innerHTML = '';
   document.getElementById('start-btn-in-room').style.display = 'none';
   document.getElementById('top-right-hud').style.display = 'flex';
+  document.getElementById('hud-map-btn').style.display = '';
 
   const intro = document.getElementById('role-reveal-screen');
   const title = document.getElementById('role-title');
@@ -833,7 +840,7 @@ socket.on('game_over', ({ winner, reason, players }) => {
   setWalkSound(false); sabLoop.pause();
   ['meeting-modal', 'map-modal', 'ejection-screen', 'meeting-intro-screen', 'sab-flash'].forEach(id => document.getElementById(id).style.display = 'none');
   const win = role === winner;
-  playSfx(win ? 'win' : 'lose', 1);
+  playSfx(winner === 'IMPOSTOR' ? 'lose' : 'win', 1); // 임포스터 승리=lose.mp3, 크루원 승리=win.mp3
   const t = document.getElementById('go-title');
   t.innerText = win ? 'VICTORY' : 'DEFEAT';
   t.style.color = win ? '#facc15' : '#ef4444';
@@ -947,6 +954,7 @@ function triggerSabotage() {
 
 function triggerVent() {
   if (role !== 'IMPOSTOR' || !currentRoom.players[myId].isAlive) return;
+  if (ventTravel) return;
   if (!isVented) {
     const nearVent = getNearestVent();
     if (!nearVent) return;
@@ -982,9 +990,12 @@ function showVentNav(curVent) {
   });
 }
 function travelToVent(tv) {
-  currentVentId = tv.id; localPlayer.x = tv.x; localPlayer.y = tv.y; ventAnimTick = 0;
+  if (ventTravel) return;
+  currentVentId = tv.id; ventAnimTick = 0; hideVentNav();
+  ventTravel = { fx: localPlayer.x, fy: localPlayer.y, tx: tv.x, ty: tv.y, t0: performance.now(), dur: 350, vent: tv };
+  playSfx('ventmove', 1); // 벤트 이동 소리 (이동하는 임포스터에게만 들림)
   socket.emit('toggle_vent', { inVent: true, x: tv.x, y: tv.y, ventId: tv.id });
-  showVentNav(tv);
+  // (이동이 끝나면 gameLoop 에서 화살표를 다시 표시)
 }
 function hideVentNav() {
   const nav = document.getElementById('vent-nav-ui');
@@ -1133,6 +1144,24 @@ function drawSabArrows() {
   });
 }
 
+// ───── 방 나가기 (로비 = 방 목록 화면으로) ─────
+function leaveToLobby() {
+  if (!confirm('방에서 나가시겠습니까?')) return;
+  socket.emit('leave_room');
+  resetToRoomList();
+}
+function resetToRoomList() {
+  TaskSys.close(); closeAdminMap(); closeCams(); closeSabotageModal();
+  setWalkSound(false); sabLoop.pause(); typeToken++;
+  ['meeting-modal', 'map-modal', 'ejection-screen', 'meeting-intro-screen', 'role-reveal-screen', 'gameover-screen', 'sab-flash', 'sab-banner'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+  hideVentNav(); resetKeys();
+  currentRoom = null; role = 'CREWMATE'; bodies = []; isVented = false; currentVentId = null; ventTravel = null;
+  sabotageState = { type: null, doors: [], fixed: [], sw: [] }; closedSegs = []; doorReadyLocal = {}; cctvCount = 0;
+  document.getElementById('in-game-ui').style.display = 'none';
+  document.querySelector('.top-right-hud').style.display = 'none';
+  localPlayer.x = LOBBY_SPAWN.x; localPlayer.y = LOBBY_SPAWN.y;
+  switchScreen('screen-rooms');
+}
 function toggleMapModal() {
   const modal = document.getElementById('map-modal');
   const isShow = modal.style.display === 'flex';
@@ -1408,7 +1437,31 @@ function drawMapView(c) {
   c.imageSmoothingEnabled = false;
   c.drawImage(img, x0 * kx, y0 * ky, (x1 - x0) * kx, (y1 - y0) * ky, x0, y0, x1 - x0, y1 - y0);
 }
+// [렉 수정] 안개: 임시 캔버스 없이 한 번에 그림 (모양은 이전과 동일, 화면 전체 연산 횟수가 크게 줄어듦)
+function simplifyPoly(poly) {
+  if (poly._s) return poly._s;
+  const out = [], n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const a = poly[(i + n - 1) % n], b = poly[i], c = poly[(i + 1) % n];
+    if (Math.abs((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)) > 0.5) out.push(b); // 일직선 위의 점 제거
+  }
+  return (poly._s = out.length >= 3 ? out : poly);
+}
 function drawFog(sc, radius, poly) {
+  const cw = canvas.width, ch = canvas.height, px = localPlayer.x, py = localPlayer.y;
+  const sp = simplifyPoly(poly), hw = cw / 2 / sc + 4, hh = ch / 2 / sc + 4;
+  const tracePoly = () => { ctx.moveTo(sp[0].x, sp[0].y); for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y); ctx.closePath(); };
+  ctx.save();
+  ctx.setTransform(sc, 0, 0, sc, cw / 2 - px * sc, ch / 2 - py * sc);
+  ctx.beginPath(); ctx.rect(px - hw, py - hh, hw * 2, hh * 2); tracePoly();
+  ctx.fillStyle = FOG_COLOR; ctx.fill('evenodd');                 // 시야 밖: 균일하게 어둡게
+  ctx.beginPath(); tracePoly(); ctx.clip();                       // 시야 안: 가장자리만 서서히 어둡게
+  const g = ctx.createRadialGradient(px, py, radius * 0.85, px, py, radius);
+  g.addColorStop(0, FOG_COLOR.replace(/[\d.]+\)$/, '0)')); g.addColorStop(1, FOG_COLOR);
+  ctx.fillStyle = g; ctx.fillRect(px - hw, py - hh, hw * 2, hh * 2);
+  ctx.restore();
+}
+function drawFogOld(sc, radius, poly) {
   const cw = maskCanvas.width, ch = maskCanvas.height;
   mctx.save();
   mctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1468,10 +1521,31 @@ const joyEndH = (e) => { for (const t of e.changedTouches) if (t.identifier === 
 window.addEventListener('touchend', joyEndH);
 window.addEventListener('touchcancel', joyEndH);
 
-let animTick = 0, lastTs = 0, lastSend = 0, wasMoving = false;
+let animTick = 0, lastTs = 0, lastSend = 0, wasMoving = false, fpsAcc = 0, fpsN = 0;
 function gameLoop(ts) {
   const dt = Math.min(3, lastTs ? (ts - lastTs) / 16.667 : 1); // 프레임 보정 (고주사율 모니터에서도 같은 속도)
   const dms = lastTs ? ts - lastTs : 0;
+  // 벤트 사이 이동: 순간이동 대신 카메라가 빠르게 미끄러져 이동
+  if (ventTravel && !isVented) ventTravel = null;
+  if (ventTravel) {
+    const k = Math.min(1, (performance.now() - ventTravel.t0) / ventTravel.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    localPlayer.x = ventTravel.fx + (ventTravel.tx - ventTravel.fx) * e;
+    localPlayer.y = ventTravel.fy + (ventTravel.ty - ventTravel.fy) * e;
+    if (k >= 1) { const v = ventTravel.vent; ventTravel = null; showVentNav(v); }
+  }
+  // 자동 화질: 프레임이 느리면 해상도를 단계적으로 낮춤 (주소 뒤에 ?fps 를 붙이면 fps 표시)
+  if (currentRoom && currentRoom.state === 'PLAYING' && dms > 0 && dms < 250) {
+    fpsAcc += dms; fpsN++;
+    if (fpsN >= 90) {
+      const avg = fpsAcc / fpsN; fpsAcc = 0; fpsN = 0;
+      if (avg > 24 && renderScale > 0.6) { renderScale = Math.max(0.6, renderScale - 0.1); resizeCanvas(); }
+      if (/[?&]fps/.test(location.search)) {
+        let b = document.getElementById('fps-badge');
+        if (!b) { b = document.createElement('div'); b.id = 'fps-badge'; b.style.cssText = 'position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:99998;background:rgba(0,0,0,.6);color:#fff;font:12px monospace;padding:2px 8px;border-radius:8px;pointer-events:none'; document.body.appendChild(b); }
+        b.textContent = 'fps ' + Math.round(1000 / avg) + ' / 해상도 ' + Math.round(renderScale * 100) + '%';
+      }
+    }
+  }
   lastTs = ts;
   animTick++;
   if (isVented) lastKillStamp += dms; // 벤트 안에서는 킬 쿨다운 정지
@@ -1597,7 +1671,7 @@ function gameLoop(ts) {
         drawMapView(ctx);
       } else { ctx.fillStyle = '#1e2837'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
 
-      REAL_SKELD_VENTS.forEach(v => drawVent(ctx, v));
+      REAL_SKELD_VENTS.forEach(v => { if (Math.abs(v.x - localPlayer.x) < VIEW_W / 2 + 60 && Math.abs(v.y - localPlayer.y) < VIEW_H / 2 + 60) drawVent(ctx, v); }); // 화면 밖 벤트는 안 그림
       drawDoors(ctx);
       drawCamLights(ctx);
       TaskSys.draw(ctx, animTick);
