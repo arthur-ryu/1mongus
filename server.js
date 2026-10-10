@@ -339,7 +339,7 @@ io.on('connection', (socket) => {
     const voter = room.players[socket.id];
     if (!voter || !voter.isAlive || room.votes[socket.id]) return; // 유령 투표 불가
     room.votes[socket.id] = targetId;
-    io.to(socket.roomId).emit('vote_status', { voterId: socket.id, totalVoted: Object.keys(room.votes).length });
+    io.to(socket.roomId).emit('vote_status', { voterId: socket.id, voterName: voter.name, totalVoted: Object.keys(room.votes).length });
     const aliveCount = Object.values(room.players).filter(p => p.isAlive).length;
     if (Object.keys(room.votes).length >= aliveCount) {
       if (room.meetingTimer) clearInterval(room.meetingTimer);
