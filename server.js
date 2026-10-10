@@ -19,11 +19,23 @@ const DOOR_MS = 10000;     // 문 닫힘 시간
 const DOOR_CD = 30000;     // 문 쿨다운 (방마다 따로)
 const DOOR_CD_INIT = 10000; // 시작/회의 후 첫 문 쿨다운
 const SAB_TIME = 30;       // 원자로/산소 제한시간(초)
+const INTRO_MS = 2500;     // 회의 시작 연출 시간 (클라이언트 index.html 의 값과 맞춰야 함)
+const EJECT_MS = 5000;     // 추방 결과(타이핑) 화면 시간
 const DOOR_ROOMS = ['cafeteria', 'upperEngine', 'lowerEngine', 'security', 'medbay', 'electrical', 'storage']; // 실제 Skeld 문 방
 const VIS_KEYS = ['scan', 'asteroids', 'shields', 'garbage'];
 const SPAWN = { x: 3480, y: 1330, r: 80 };
 
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// 닉네임 정리 + 방 안 중복 검사 (대소문자 무시)
+function cleanName(playerName, id) {
+  return (playerName && typeof playerName === 'string' && playerName.trim().length >= 2)
+    ? playerName.trim().slice(0, 5) : `Crew_${id.substring(0, 4)}`;
+}
+function nameTaken(room, name) {
+  const low = name.toLowerCase();
+  return Object.values(room.players).some(p => p.name.toLowerCase() === low);
+}
 
 // 인원이 적을수록 미션 많이
 function taskCount(n) { return n <= 3 ? 8 : n <= 5 ? 7 : n <= 7 ? 6 : n <= 9 ? 5 : 4; }
@@ -106,6 +118,9 @@ io.on('connection', (socket) => {
     if (!room) return socket.emit('error_msg', '방이 존재하지 않습니다.');
     if (room.state !== 'LOBBY') return socket.emit('error_msg', '이미 게임이 진행 중입니다.');
     if (Object.keys(room.players).length >= room.maxPlayers) return socket.emit('error_msg', '정원 초과입니다.');
+    if (nameTaken(room, cleanName(playerName, socket.id))) {
+      return socket.emit('name_taken', '이 방에 같은 닉네임이 이미 있습니다. 다른 닉네임으로 바꿔주세요.');
+    }
     joinRoom(socket, roomId, playerName);
     io.emit('room_list', getRoomList());
   });
@@ -288,7 +303,7 @@ io.on('connection', (socket) => {
     const p = room.players[socket.id];
     if (!p || !p.isAlive) return;
     if (room.sab && (room.sab.type === 'reactor' || room.sab.type === 'o2')) return; // 원자로/산소 중 불가
-    startMeeting(room, p, 'EMERGENCY');
+    startMeeting(room, p, 'EMERGENCY', null);
   });
 
   socket.on('report_body', () => {
@@ -296,8 +311,13 @@ io.on('connection', (socket) => {
     if (!room || room.state !== 'PLAYING') return;
     const p = room.players[socket.id];
     if (!p || !p.isAlive) return;
-    if (!room.bodies.some(b => Math.hypot(b.x - p.x, b.y - p.y) < 300)) return;
-    startMeeting(room, p, 'REPORT');
+    // 신고 가능 범위 안에서 가장 가까운 시체를 "발견된 시체"로 사용
+    const near = room.bodies
+      .map(b => ({ b, d: Math.hypot(b.x - p.x, b.y - p.y) }))
+      .filter(o => o.d < 300)
+      .sort((a, b) => a.d - b.d);
+    if (!near.length) return;
+    startMeeting(room, p, 'REPORT', near[0].b);
   });
 
   socket.on('meeting_chat', (msg) => {
@@ -331,6 +351,7 @@ io.on('connection', (socket) => {
     const roomId = socket.roomId;
     if (roomId && rooms[roomId]) {
       const room = rooms[roomId];
+      const leaver = room.players[socket.id];
       delete room.players[socket.id];
       room.cams.delete(socket.id);
       if (room.sab && room.sab.hold) for (const k in room.sab.hold) if (room.sab.hold[k] === socket.id) delete room.sab.hold[k];
@@ -340,6 +361,7 @@ io.on('connection', (socket) => {
         delete rooms[roomId];
       } else {
         if (room.hostId === socket.id) room.hostId = Object.keys(room.players)[0];
+        if (leaver) io.to(roomId).emit('player_left', { id: socket.id, name: leaver.name, color: leaver.color }); // 오른쪽 빨간 알림
         io.to(roomId).emit('room_update', pub(room));
         if (room.state === 'PLAYING') checkGameOver(room);
       }
@@ -355,8 +377,7 @@ io.on('connection', (socket) => {
     const avail = COLOR_PALETTE.filter(c => !used.includes(c));
     const pool = avail.length ? avail : COLOR_PALETTE;
     const color = pool[Math.floor(Math.random() * pool.length)];
-    const finalName = (playerName && typeof playerName === 'string' && playerName.trim().length >= 2)
-      ? playerName.trim().slice(0, 5) : `Crew_${sock.id.substring(0, 4)}`;
+    const finalName = cleanName(playerName, sock.id);
 
     room.players[sock.id] = {
       id: sock.id, name: finalName, color,
@@ -367,8 +388,8 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('room_update', pub(room));
   }
 
-  // 누가 눌렀는지 2초 연출 → 토론 시작
-  function startMeeting(room, caller, type) {
+  // 누가 눌렀는지(+발견된 시체) 연출 → 토론 시작
+  function startMeeting(room, caller, type, body) {
     room.state = 'MEETING';
     room.votes = {};
     room.bodies = [];
@@ -378,7 +399,10 @@ io.on('connection', (socket) => {
     room.cams.clear(); io.to(room.id).emit('cctv_count', 0);
     if (room.sab && room.sab.hold) { room.sab.hold = {}; sendSab(room); }
 
-    io.to(room.id).emit('meeting_intro', { callerName: caller.name, callerColor: caller.color, type });
+    io.to(room.id).emit('meeting_intro', {
+      callerName: caller.name, callerColor: caller.color, type,
+      bodyColor: body ? body.color : null
+    });
 
     setTimeout(() => {
       if (room.state !== 'MEETING' || room.meetingPhase !== 'INTRO') return;
@@ -399,7 +423,7 @@ io.on('connection', (socket) => {
           else io.to(room.id).emit('meeting_timer_tick', { phase: 'VOTING', timeLeft: room.phaseTime });
         }
       }, 1000);
-    }, 2000);
+    }, INTRO_MS);
   }
 
   function resolveMeeting(room) {
@@ -445,7 +469,7 @@ io.on('connection', (socket) => {
           io.to(room.id).emit('resume_game', { players: room.players });
           sendSab(room);
         }
-      }, 4000);
+      }, EJECT_MS);
     }, 5000); // 누가 누구에게 투표했는지 5초간 공개
   }
 
