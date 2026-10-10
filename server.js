@@ -347,7 +347,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  let leaveRoomImpl;
+  socket.on('leave_room', () => { const rid = socket.roomId; if (!rid) return; socket.leave(rid); leaveRoomImpl(); socket.roomId = null; });
+  socket.on('disconnect', leaveRoomImpl = () => {
     const roomId = socket.roomId;
     if (roomId && rooms[roomId]) {
       const room = rooms[roomId];
