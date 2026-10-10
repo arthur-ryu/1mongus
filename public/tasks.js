@@ -43,6 +43,7 @@ if (typeof window !== 'undefined') window.TaskSys = (() => {
   const VIS = new Set(['scan', 'asteroids', 'shields', 'garbage']); // 하는 모습이 보이는 미션
   let mine = [], prog = { done: 0, total: 0 }, hooked = false, ui = null, overlay = null;
   let curVis = false, curSab = null, holding = false, sabUI = null;
+  let listOpen = true; // 미션 목록 펼침/접힘
   const el = (tag, css, html) => { const e = document.createElement(tag); e.style.cssText = css || ''; if (html) e.innerHTML = html; return e; };
   const BTN = 'padding:10px 20px;border-radius:12px;border:3px solid #0f172a;background:#0284c7;color:#fff;font-size:16px;cursor:pointer;';
   const wp = q => ({ x: q[0] * REF_SX, y: q[1] * REF_SY });
@@ -228,17 +229,30 @@ if (typeof window !== 'undefined') window.TaskSys = (() => {
     if (role === 'IMPOSTOR' || !mine.length) return null; // 임포스터는 가짜 미션만 (실제 수행 불가)
     return mine.find(t => { if (t.done) return false; const w = world(t); return Math.hypot(w.x - localPlayer.x, w.y - localPlayer.y) < USE_DIST; }) || null;
   }
+
+  // 미션 목록: 화면 크기에 맞춰 글자/너비가 자동으로 줄고 늘어나며, 제목줄을 눌러 접고 펼 수 있음
   function render() {
-    if (!ui) { ui = el('div', 'position:absolute;top:60px;left:16px;width:230px;z-index:55;pointer-events:none;font-size:13px;color:#0f172a;');
-      document.getElementById('in-game-ui').appendChild(ui); }
+    if (!ui) {
+      ui = el('div', 'position:absolute;top:clamp(46px,9vh,64px);left:16px;width:clamp(150px,24vw,250px);z-index:55;pointer-events:none;font-size:clamp(10px,min(1.6vw,2.8vh),14px);color:#0f172a;');
+      document.getElementById('in-game-ui').appendChild(ui);
+    }
     if (sabotageState.type === 'comms') {
-      ui.innerHTML = '<div style="padding:10px;background:rgba(15,23,42,.9);color:#ef4444;border:3px solid #ef4444;border-radius:12px;">📡 통신 장애<br>미션 목록을 볼 수 없습니다</div>';
+      ui.innerHTML = '<div style="padding:.7em;background:rgba(15,23,42,.9);color:#ef4444;border:3px solid #ef4444;border-radius:12px;">📡 통신 장애<br>미션 목록을 볼 수 없습니다</div>';
       return;
     }
     const pct = prog.total ? Math.round(prog.done / prog.total * 100) : 0;
-    ui.innerHTML = `<div style="position:relative;height:22px;background:#e2e8f0;border:3px solid #64748b;border-radius:10px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:#22c55e;transition:width .3s;"></div><div style="position:absolute;inset:0;text-align:center;line-height:16px;font-size:12px;color:#0f172a;">${pct}%</div></div>
-      <div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.85);border:3px solid #64748b;border-radius:12px;line-height:1.5;">
-      ${mine.map(t => `<div style="${t.done ? 'color:#16a34a;text-decoration:line-through;' : ''}">${t.done ? '✔' : '☐'} ${t.def.name}${t.done ? '' : ' — ' + t.spots[t.stage].n}</div>`).join('')}</div>`;
+    const list = mine.map(t => `<div style="${t.done ? 'color:#16a34a;text-decoration:line-through;' : ''}">${t.done ? '✔' : '☐'} ${t.def.name}${t.done ? '' : ' — ' + t.spots[t.stage].n}</div>`).join('');
+    ui.innerHTML = `
+      <div style="position:relative;height:1.7em;background:#e2e8f0;border:3px solid #64748b;border-radius:10px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:#22c55e;transition:width .3s;"></div>
+        <div style="position:absolute;inset:0;text-align:center;line-height:1.4em;font-size:.95em;color:#0f172a;">${pct}%</div>
+      </div>
+      <div id="task-toggle" style="pointer-events:auto;cursor:pointer;margin-top:6px;padding:.45em .8em;background:rgba(255,255,255,.92);border:3px solid #64748b;border-radius:12px;display:flex;justify-content:space-between;align-items:center;gap:.6em;">
+        <span>📋 미션 목록</span><span style="color:#0284c7;">${listOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+      </div>
+      ${listOpen ? `<div style="margin-top:4px;padding:.6em .8em;background:rgba(255,255,255,.85);border:3px solid #64748b;border-radius:12px;line-height:1.5;">${list}</div>` : ''}`;
+    const tg = ui.querySelector('#task-toggle');
+    if (tg) tg.onclick = () => { listOpen = !listOpen; render(); };
   }
 
   return {
