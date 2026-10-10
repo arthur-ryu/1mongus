@@ -1,0 +1,13 @@
+{
+  "name": "1mongus",
+  "version": "1.0.0",
+  "description": "1mongus Among Us Web Clone",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "socket.io": "^4.7.5"
+  }
+}

@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Among Us - The Skeld</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; font-family: 'Fredoka One', cursive, sans-serif; }
+body, html { width: 100%; height: 100%; overflow: hidden; background: #e2e8f0; color: #1e293b; }
+
+#rotate-device-screen { display: none; position: fixed; inset: 0; background: #f8fafc; z-index: 99999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 24px; }
+#rotate-device-screen svg { width: 72px; height: 72px; margin-bottom: 20px; fill: #0284c7; animation: rotateAnim 2s infinite ease-in-out; }
+#rotate-device-screen h2 { font-size: 24px; color: #0f172a; }
+@keyframes rotateAnim { 0% { transform: rotate(0deg); } 50% { transform: rotate(-90deg); } 100% { transform: rotate(0deg); } }
+@media screen and (orientation: portrait) { #rotate-device-screen { display: flex !important; } }
+
+.screen { position: absolute; inset: 0; display: none; justify-content: center; align-items: center; z-index: 10; }
+.active { display: flex !important; }
+.card { background: #fff; border: 4px solid #94a3b8; border-radius: 24px; padding: clamp(20px, 4vw, 36px); width: clamp(300px, 80vw, 520px); box-shadow: 0 16px 40px rgba(100,116,139,.25); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+h1.brand-title { font-size: clamp(44px, 8vw, 68px); color: #ef4444; -webkit-text-stroke: 2px #0f172a; text-shadow: 3px 3px 0 rgba(0,0,0,.15); }
+input, select, button { width: 100%; padding: 12px 16px; border-radius: 12px; border: 3px solid #cbd5e1; background: #f8fafc; color: #0f172a; font-size: 16px; outline: none; }
+input:focus, select:focus { border-color: #0284c7; background: #fff; }
+input:disabled { opacity: .5; }
+.btn-main { background: #ef4444; border: 3px solid #0f172a; font-size: 20px; cursor: pointer; color: #fff; box-shadow: 0 5px 0 #991b1b; transition: transform .1s, box-shadow .1s; }
+.btn-main:active { transform: translateY(3px); box-shadow: 0 2px 0 #991b1b; }
+.room-list-box { width: 100%; max-height: 180px; overflow-y: auto; border: 3px solid #cbd5e1; border-radius: 12px; background: #f1f5f9; }
+.room-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 2px solid #e2e8f0; }
+.room-item button { width: auto; padding: 6px 14px; font-size: 14px; background: #0284c7; color: #fff; border: 2px solid #0f172a; cursor: pointer; }
+
+#canvas-container { position: absolute; inset: 0; background: #000; }
+canvas { display: block; width: 100%; height: 100%; }
+
+.top-right-hud { position: absolute; top: 16px; right: 16px; display: none; gap: 12px; z-index: 60; pointer-events: auto; }
+.hud-circle-btn { width: 58px; height: 58px; cursor: pointer; border-radius: 50%; background: #fff; border: 3px solid #64748b; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: transform .1s; font-size: 26px; }
+.hud-circle-btn:active { transform: scale(.92); }
+.hud-map-btn { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/map.png'); background-size: contain; background-repeat: no-repeat; background-position: center; }
+
+.action-btn-group { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; z-index: 60; align-items: flex-end; }
+.action-btn-row { display: flex; gap: 14px; justify-content: flex-end; }
+.among-img-btn { width: 82px; height: 82px; cursor: pointer; background-size: contain; background-repeat: no-repeat; background-position: center; transition: all .1s; opacity: .35; pointer-events: none; position: relative; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
+.among-img-btn.active { opacity: 1 !important; pointer-events: auto !important; }
+.among-img-btn:active { transform: translateY(4px) scale(.95); }
+.btn-use { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/use.png'); }
+.btn-sabotage { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/sabotage.png'); display: none; }
+.btn-kill { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/kill.png'); display: none; }
+.btn-vent { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/vent.png'); display: none; }
+.btn-report { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/report.png'); }
+.cooldown-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.65); border-radius: 50%; display: none; justify-content: center; align-items: center; font-size: 26px; color: #fff; font-weight: 900; -webkit-text-stroke: 1.5px #000; pointer-events: none; }
+
+#sab-banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: none; padding: 8px 22px; background: #ef4444; color: #fff; border: 3px solid #0f172a; border-radius: 20px; font-size: 18px; z-index: 62; pointer-events: none; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .6; } }
+
+#vent-nav-ui { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 65; }
+.vent-arrow-btn { position: absolute; width: 68px; height: 68px; display: flex; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; transform-origin: center center; }
+.vent-arrow-btn svg { width: 100%; height: 100%; filter: drop-shadow(0 0 10px #38fedc) drop-shadow(0 4px 8px rgba(0,0,0,.8)); }
+.vent-arrow-btn:active svg { transform: scale(.92); }
+
+#start-btn-in-room { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: auto; padding: 16px 56px; font-size: 24px; letter-spacing: 2px; pointer-events: auto; display: none; z-index: 70; background: #ef4444; border: 4px solid #0f172a; border-radius: 40px; box-shadow: 0 6px 0 #991b1b; }
+#start-btn-in-room:active { transform: translateX(-50%) translateY(4px); box-shadow: 0 2px 0 #991b1b; }
+
+#joystick-zone { position: absolute; bottom: 24px; left: 24px; width: 120px; height: 120px; background: rgba(255,255,255,.3); border: 3px solid rgba(15,23,42,.2); border-radius: 50%; pointer-events: auto; touch-action: none; z-index: 60; }
+#joystick-knob { position: absolute; top: 32px; left: 32px; width: 56px; height: 56px; background: radial-gradient(circle at 35% 35%, #0284c7, #0369a1); border: 3px solid #0f172a; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,.3); }
+
+#map-modal, #admin-modal, #cam-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.7); z-index: 400; justify-content: center; align-items: center; pointer-events: auto; }
+.map-box { width: min(880px, 92vw); aspect-ratio: 16/9; background: #fff; border: 4px solid #64748b; border-radius: 20px; position: relative; box-shadow: 0 20px 40px rgba(0,0,0,.3); }
+.map-close-btn { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%; background: #ef4444; color: #fff; border: 3px solid #0f172a; font-size: 18px; cursor: pointer; z-index: 10; }
+
+#sabotage-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.7); z-index: 420; justify-content: center; align-items: center; pointer-events: auto; }
+.sabotage-box { width: min(880px, 92vw); aspect-ratio: 16/9; background: #0f172a url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/The_Skeld_map.png') center/100% 100% no-repeat; border: 4px solid #ef4444; border-radius: 20px; position: relative; box-shadow: 0 0 40px rgba(239,68,68,.3); }
+.sab-icon { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: #ef4444; border: 3px solid #fff; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,.4); font-size: 20px; }
+.sab-icon.door { background: #f59e0b; }
+.sab-icon.off { opacity: .35; pointer-events: none; filter: grayscale(.8); }
+
+#meeting-intro-screen { position: fixed; inset: 0; z-index: 900; display: none; flex-direction: column; justify-content: center; align-items: center; background: rgba(15,23,42,.93); text-align: center; gap: 14px; }
+#mi-title { font-size: clamp(36px, 7vw, 70px); color: #ef4444; -webkit-text-stroke: 2px #000; }
+#mi-sub { font-size: clamp(18px, 3vw, 28px); color: #fff; }
+
+#meeting-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.65); z-index: 500; justify-content: center; align-items: center; padding: 16px; pointer-events: auto; }
+.meeting-box { background: #f8fafc; border: 6px solid #64748b; border-radius: 24px; width: min(920px, 94vw); height: min(600px, 92vh); display: flex; flex-direction: column; padding: 22px; gap: 16px; box-shadow: 0 20px 50px rgba(15,23,42,.35); position: relative; }
+.meeting-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #e2e8f0; padding-bottom: 12px; }
+.meeting-title { color: #ef4444; font-size: 26px; -webkit-text-stroke: 1.5px #0f172a; }
+.meeting-chat-btn { width: 48px; height: 48px; border-radius: 50%; background: #0284c7; color: #fff; border: 3px solid #0f172a; font-size: 22px; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 8px rgba(0,0,0,.15); transition: transform .1s; }
+.meeting-chat-btn:active { transform: scale(.92); }
+.voter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow-y: auto; flex: 1; padding: 4px; }
+.voter-card { background: #fff; border: 3px solid #cbd5e1; border-radius: 14px; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; min-height: 54px; box-shadow: 0 4px 8px rgba(0,0,0,.04); transition: border-color .1s, transform .1s; }
+.voter-card:hover { border-color: #0284c7; transform: translateY(-2px); }
+.voter-card.dead { opacity: .45; filter: grayscale(1); pointer-events: none; background: #f1f5f9; }
+.voter-card.locked { pointer-events: none !important; }
+.voted-badge { background: #22c55e; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 20px; border: 1.5px solid #0f172a; font-weight: bold; margin-left: 6px; }
+.voted-by-container { display: flex; gap: 4px; align-items: center; }
+.vote-mini-marker { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #000; font-size: 10px; display: flex; align-items: center; justify-content: center; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.meeting-footer { display: flex; justify-content: space-between; align-items: center; border-top: 3px solid #e2e8f0; padding-top: 10px; }
+.skip-btn { width: auto; padding: 10px 24px; background: #e2e8f0; color: #0f172a; border: 3px solid #64748b; border-radius: 12px; cursor: pointer; font-size: 16px; font-weight: bold; }
+.skip-btn.locked { opacity: .5; pointer-events: none; }
+.meeting-timer-box { font-size: 18px; font-weight: bold; color: #ef4444; background: #fee2e2; padding: 6px 16px; border-radius: 20px; border: 2px solid #ef4444; }
+
+#chat-modal { display: none; position: absolute; inset: 16px; background: #fff; border: 4px solid #64748b; border-radius: 20px; z-index: 550; flex-direction: column; padding: 16px; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.25); }
+.chat-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+.chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 6px 4px; }
+.chat-row { display: flex; flex-direction: column; width: 100%; }
+.chat-row.mine { align-items: flex-end; }
+.chat-row.other { align-items: flex-start; }
+.chat-sender-info { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 3px; }
+.chat-bubble { max-width: 75%; padding: 8px 14px; border-radius: 16px; font-size: 14px; word-break: break-all; white-space: pre-wrap; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,.06); }
+.chat-bubble.mine { background: #0284c7; color: #fff; border-bottom-right-radius: 4px; }
+.chat-bubble.other { background: #f1f5f9; color: #0f172a; border: 1.5px solid #cbd5e1; border-bottom-left-radius: 4px; }
+.chat-voted-tag { background: #22c55e; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: bold; border: 1px solid #0f172a; }
+.chat-input-bar { display: flex; gap: 8px; }
+.chat-input-bar input { flex: 1; }
+.chat-input-bar button { width: auto; padding: 10px 22px; background: #0284c7; color: #fff; border: 2px solid #0f172a; cursor: pointer; }
+
+#role-reveal-screen, #ejection-screen { position: fixed; inset: 0; z-index: 1000; display: none; flex-direction: column; justify-content: center; align-items: center; background: #000; text-align: center; }
+#role-title { font-size: clamp(54px, 10vw, 92px); -webkit-text-stroke: 3px #000; }
+#sab-flash { position: fixed; inset: 0; pointer-events: none; z-index: 45; display: none; background: radial-gradient(ellipse at center, rgba(239,68,68,0) 35%, rgba(239,68,68,.6) 100%); animation: redflash 1.2s ease-in-out infinite; }
+@keyframes redflash { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+#gameover-screen { position: fixed; inset: 0; z-index: 3000; display: none; flex-direction: column; justify-content: center; align-items: center; background: #000; gap: 14px; text-align: center; }
+#go-title { font-size: clamp(60px, 12vw, 120px); -webkit-text-stroke: 3px #000; }
+#go-sub { color: #cbd5e1; font-size: 22px; }
+</style>
+</head>
+<body>
+
+<div id="rotate-device-screen">
+  <svg viewBox="0 0 24 24"><path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zM7.52 21.48C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32zM6 6v12h12V6H6zm10 10H8V8h8v8z"/></svg>
+  <h2>화면을 가로로 돌려주세요</h2>
+</div>
+
+<div id="role-reveal-screen">
+  <div id="role-title">CREWMATE</div>
+  <div id="role-subtitle" style="font-size:22px; color:#aaa; margin-top:8px;">크루원들 사이에 임포스터가 숨어있습니다.</div>
+</div>
+
+<div id="ejection-screen">
+  <div id="ejection-text" style="font-size:32px; color:#fff; text-shadow:2px 2px #000;">누군가 우주 밖으로 방출되었습니다.</div>
+</div>
+
+<div id="meeting-intro-screen"><div id="mi-title"></div><div id="mi-sub"></div></div>
+
+<div id="screen-auth" class="screen active">
+  <div class="card">
+    <h1 class="brand-title">1mongus</h1>
+    <p style="font-size:14px; color:#64748b;">비밀번호를 입력하세요.</p>
+    <input type="password" id="auth-code-input" placeholder="비밀번호 입력">
+    <button class="btn-main" onclick="handleAuth()">인증하기</button>
+    <div id="auth-error" style="color:#ef4444; font-size:14px; display:none;">비밀번호가 올바르지 않습니다.</div>
+  </div>
+</div>
+
+<div id="screen-home" class="screen">
+  <div class="card">
+    <input type="text" id="player-nickname-input" placeholder="닉네임 입력 (2~5자)" maxlength="5" style="text-align:center; font-size:18px; font-weight:bold; letter-spacing:1px;">
+    <h1 class="brand-title">1mongus</h1>
+    <button class="btn-main" style="padding: 16px 24px;" onclick="goToLobbyList()">시작하기</button>
+    <div id="nickname-error" style="color:#ef4444; font-size:14px; display:none;">닉네임은 2글자 이상 5글자 이하로 입력해주세요.</div>
+  </div>
+</div>
+
+<div id="screen-rooms" class="screen">
+  <div class="card" style="width: clamp(300px, 85vw, 600px);">
+    <h2 style="font-size:24px; align-self: flex-start; color:#0f172a;">우주선 방 목록</h2>
+    <div class="room-list-box" id="room-list-container"></div>
+    <div style="width:100%; height:2px; background:#e2e8f0; margin: 4px 0;"></div>
+    <h3 style="font-size:18px; align-self: flex-start; color:#0f172a;">새로운 방 만들기</h3>
+    <div style="display:flex; gap:10px; width:100%;">
+      <input type="text" id="create-room-name" placeholder="방 이름 입력" style="flex:2;">
+      <select id="create-room-max" style="flex:1;">
+        <option value="5">5명</option>
+        <option value="6">6명</option>
+        <option value="7">7명 (임포 2명)</option>
+        <option value="10" selected>10명</option>
+      </select>
+    </div>
+    <button class="btn-main" onclick="handleCreateRoom()">방 만들기</button>
+  </div>
+</div>
+
+<div id="canvas-container"><canvas id="game-canvas"></canvas></div>
+
+<div class="top-right-hud" id="top-right-hud">
+  <div class="hud-circle-btn hud-map-btn" onclick="toggleMapModal()"></div>
+</div>
+
+<div id="in-game-ui">
+  <div id="room-info-pill" style="position:absolute; top:16px; left:16px; padding:8px 18px; background:rgba(255,255,255,.85); border:3px solid #64748b; border-radius:20px; font-size:14px; font-weight:bold; color:#0f172a;">대기실 | 1/10</div>
+  <div id="sab-banner"></div>
+  <button id="start-btn-in-room" class="btn-main" onclick="handleStartGame()">START</button>
+
+  <div class="action-btn-group">
+    <div class="action-btn-row">
+      <div id="btn-vent" class="among-img-btn btn-vent" onclick="triggerVent()"></div>
+      <div id="btn-report" class="among-img-btn btn-report" onclick="triggerReport()"></div>
+    </div>
+    <div class="action-btn-row">
+      <div id="btn-kill" class="among-img-btn btn-kill" onclick="triggerKill()"><div id="kill-cooldown-num" class="cooldown-overlay"></div></div>
+      <div id="btn-sabotage" class="among-img-btn btn-sabotage" onclick="triggerSabotageOrUse()"><div id="sab-cooldown-num" class="cooldown-overlay"></div></div>
+      <div id="btn-use" class="among-img-btn btn-use" onclick="triggerUse()" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div id="vent-nav-ui"></div>
+  <div id="joystick-zone"><div id="joystick-knob"></div></div>
+</div>
+
+<div id="map-modal">
+  <div class="map-box">
+    <button class="map-close-btn" onclick="toggleMapModal()">✕</button>
+    <canvas id="minimap-canvas" style="width:100%; height:100%; border-radius:16px;"></canvas>
+  </div>
+</div>
+
+<div id="sab-flash"></div>
+<div id="gameover-screen">
+  <div id="go-title"></div>
+  <canvas id="go-canvas" width="800" height="260" style="width:min(800px,92vw);height:auto;"></canvas>
+  <div id="go-sub"></div>
+  <button class="btn-main" style="width:auto;padding:14px 40px;" onclick="location.reload()">나가기</button>
+</div>
+
+<div id="cam-modal">
+  <div class="map-box" style="background:#000;">
+    <button class="map-close-btn" onclick="closeCams()">✕</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:6px;padding:8px;width:100%;height:100%;">
+      <canvas class="cam-c" width="440" height="248" style="width:100%;height:100%;border-radius:8px;"></canvas>
+      <canvas class="cam-c" width="440" height="248" style="width:100%;height:100%;border-radius:8px;"></canvas>
+      <canvas class="cam-c" width="440" height="248" style="width:100%;height:100%;border-radius:8px;"></canvas>
+      <canvas class="cam-c" width="440" height="248" style="width:100%;height:100%;border-radius:8px;"></canvas>
+    </div>
+  </div>
+</div>
+
+<div id="admin-modal">
+  <div class="map-box">
+    <button class="map-close-btn" onclick="closeAdminMap()">✕</button>
+    <canvas id="admin-canvas" style="width:100%; height:100%; border-radius:16px;"></canvas>
+  </div>
+</div>
+
+<div id="sabotage-modal">
+  <div class="sabotage-box" id="sabotage-box">
+    <button class="map-close-btn" onclick="closeSabotageModal()">✕</button>
+  </div>
+</div>
+
+<div id="meeting-modal">
+  <div class="meeting-box">
+    <div class="meeting-header">
+      <h2 class="meeting-title">🚨 EMERGENCY MEETING</h2>
+      <button class="meeting-chat-btn" onclick="toggleChatModal()">💬</button>
+    </div>
+    <div class="voter-grid" id="voter-list"></div>
+    <div class="meeting-footer">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button id="skip-vote-btn" class="skip-btn" onclick="castVote('SKIP')">투표 건너뛰기 (SKIP)</button>
+        <div id="skip-voters-box" class="voted-by-container"></div>
+      </div>
+      <div id="meeting-timer-box" class="meeting-timer-box">토론 시간: 10s</div>
+    </div>
+    <div id="chat-modal">
+      <div class="chat-header">
+        <h3 style="font-size:18px; color:#0f172a;">실시간 회의 채팅</h3>
+        <button class="map-close-btn" style="position:static;" onclick="toggleChatModal()">✕</button>
+      </div>
+      <div class="chat-log" id="meeting-chat-log"></div>
+      <div class="chat-input-bar">
+        <input type="text" id="chat-input" placeholder="채팅 입력 (100자 이내)..." maxlength="100" onkeydown="handleChatKeyDown(event)">
+        <button onclick="sendMeetingChat()">전송</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="tasks.js"></script>
+<script>
+const socket = io();
+
+const CDN_BASE = 'https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/';
+const skeldMapImg = new Image(); skeldMapImg.src = CDN_BASE + 'The_Skeld_map.png';
+const waitShipImg = new Image(); waitShipImg.src = CDN_BASE + 'wait.png';
+
+let myId = null, myNickname = 'Crew', currentRoom = null, role = 'CREWMATE';
+let bodies = [], killCooldown = 25, lastKillStamp = 0;
+let isVented = false, currentVentId = null, ventAnimTick = 0, ventAnimDir = 1, ventLids = {};
+let sabotageState = { type: null, doors: [], fixed: [], sw: [] };
+let doorReadyLocal = {}, closedSegs = [], adminOpen = false, camOpen = false, cctvCount = 0, sabIconRefs = [];
+let lastChatTime = 0;
+
+const MAP_SCALE = 6.0;
+const MAP_WIDTH = 1024 * MAP_SCALE;
+const MAP_HEIGHT = 576 * MAP_SCALE;
+const LOBBY_RENDER_W = 2400, LOBBY_RENDER_H = 2200;
+const LOBBY_SPAWN = { x: 1200, y: 1100 };
+const GAME_SPAWN = { x: 3480, y: 1330 };
+const TABLE = { x: 3463, y: 767 }; // 긴급회의 테이블
+
+const RAW_VENTS = [
+        { id: 'v_cafeteria', room: 'Cafeteria', x: 688, y: 152, connections: ['v_hallway_admin', 'v_admin'] },
+        { id: 'v_hallway_admin', room: 'Hallway', x: 799, y: 286, connections: ['v_cafeteria', 'v_admin'] },
+        { id: 'v_admin', room: 'Admin', x: 651, y: 363, connections: ['v_cafeteria', 'v_hallway_admin'] },
+        { id: 'v_medbay', room: 'MedBay', x: 367, y: 238, connections: ['v_electrical', 'v_security'] },
+        { id: 'v_electrical', room: 'Electrical', x: 385, y: 321, connections: ['v_medbay', 'v_security'] },
+        { id: 'v_security', room: 'Security', x: 327, y: 298, connections: ['v_medbay', 'v_electrical'] },
+        { id: 'v_weapons', room: 'Weapons', x: 785, y: 76, connections: ['v_nav_top'] },
+        { id: 'v_nav_top', room: 'Navigation Top', x: 940, y: 219, connections: ['v_weapons'] },
+        { id: 'v_shields', room: 'Shields', x: 802, y: 460, connections: ['v_nav_bottom'] },
+        { id: 'v_nav_bottom', room: 'Navigation Bottom', x: 940, y: 286, connections: ['v_shields'] },
+        { id: 'v_reactor_top', room: 'Reactor Top', x: 125, y: 215, connections: ['v_upper_engine'] },
+        { id: 'v_upper_engine', room: 'Upper Engine', x: 267, y: 95, connections: ['v_reactor_top'] },
+        { id: 'v_reactor_bottom', room: 'Reactor Bottom', x: 149, y: 298, connections: ['v_lower_engine'] },
+        { id: 'v_lower_engine', room: 'Lower Engine', x: 267, y: 445, connections: ['v_reactor_bottom'] }
+        ];
+
+const REAL_SKELD_VENTS = RAW_VENTS.map(v => ({ ...v, x: v.x * MAP_SCALE, y: v.y * MAP_SCALE }));
+
+const REF_W = 2576, REF_H = 1442;
+const REF_SX = MAP_WIDTH / REF_W;
+const REF_SY = MAP_HEIGHT / REF_H;
+const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+
+const RAW_WALKABLE = {
+  cafeteria:   [[1272,14],[1610,14],[1768,172],[1768,448],[1626,622],[1298,622],[1160,452],[1160,125]],
+  upperEngine: rect(437, 178, 697, 464),
+  lowerEngine: [[437,850],[697,850],[697,1138],[487,1138],[437,1088]],
+  reactor:     [[205,500],[226,458],[292,430],[375,430],[375,520],[462,520],[462,870],[376,870],[222,806],[205,780]],
+  security:    [[712,548],[768,482],[838,482],[858,520],[858,775],[712,775]],
+  medbay:      [[893,392],[1122,392],[1122,540],[1222,610],[1222,692],[950,692],[893,632]],
+  electrical:  [[942,748],[1222,748],[1222,885],[1108,1048],[1030,1048],[1030,1118],[942,1118]],
+  storage:     [[1300,828],[1555,828],[1555,1328],[1340,1328],[1222,1205],[1222,905]],
+  admin:       [[1605,690],[1880,690],[1880,880],[1822,938],[1605,938]],
+  o2:          [[1805,465],[1925,465],[1925,658],[1720,658],[1720,545]],
+  weapons:     [[1880,135],[2010,135],[2135,262],[2135,430],[1935,430],[1935,405],[1880,350]],
+  shields:     [[1880,905],[2135,905],[2135,1120],[2065,1190],[1925,1190],[1880,1150]],
+  navigation:  [[2342,490],[2442,490],[2540,556],[2540,722],[2480,745],[2342,745]],
+  comms:       [[1578,1105],[1855,1105],[1855,1262],[1800,1330],[1640,1330],[1578,1262]],
+  hallUpperEngineCafeteria: rect(680, 248, 1180, 352),
+  hallMedbay:               rect(968, 340, 1042, 402),
+  hallReactorSecurity:      rect(546, 450, 624, 870),
+  hallReactorDoor:          rect(448, 603, 560, 705),
+  hallSecurityDoor:         rect(610, 603, 726, 705),
+  hallLowerEngineStorage:   [[680,940],[886,940],[886,1095],[1232,1095],[1232,1196],[802,1196],[802,1043],[680,1043]],
+  hallCafeteriaStorage:     rect(1424, 600, 1500, 862),
+  hallAdmin:                rect(1480, 696, 1618, 798),
+  hallCafeteriaWeapons:     rect(1750, 248, 1900, 346),
+  hallEastHub:              [[1975,410],[2053,410],[2053,490],[2185,490],[2185,762],[2055,762],[2055,950],[1975,950],[1975,657],[2103,657],[2103,597],[1915,597],[1915,540],[1975,540]],
+  hallNavigation:           rect(2180, 565, 2352, 668),
+  hallStorageShields:       rect(1540, 968, 1890, 1078),
+  hallComms:                rect(1744, 1060, 1812, 1122)
+};
+
+// 구조물(막히는 물체): ['c',x,y,반지름] 원 / ['r',x0,y0,x1,y1] 사각형 — 위치가 어색하면 이 숫자만 수정
+const RAW_OBST = [
+  ['c',1315,190,80],['c',1585,188,80],['c',1452,320,78],['c',1315,470,80],['c',1585,470,80],
+  ['r',228,548,308,692],
+  ['r',470,275,640,398],['r',470,925,640,1045],
+  ['r',795,632,868,700],
+  ['r',895,435,962,495],['r',895,510,962,562],['r',1060,435,1124,495],['r',1060,510,1124,562],['c',1085,658,48],
+  ['r',945,880,1000,938],['r',1032,870,1092,952],
+  ['r',1325,960,1470,1095],['r',1290,845,1350,900],['r',1238,885,1292,950],['r',1280,1030,1325,1082],['r',1385,1105,1440,1172],['r',1435,940,1480,988],
+  ['r',1672,792,1818,890],['r',1675,695,1830,760],
+  ['c',2005,275,52],
+  ['r',1640,1258,1800,1320]
+];
+const OBST = RAW_OBST.map(o => o[0] === 'c'
+  ? { x: o[1] * REF_SX, y: o[2] * REF_SY, r: o[3] * REF_SX }
+  : { x0: o[1] * REF_SX, y0: o[2] * REF_SY, x1: o[3] * REF_SX, y1: o[4] * REF_SY });
+const OB_M = 16;
+
+// 문: 실제 The Skeld 문 방 7곳. s=닫히는 선분들(REF 좌표), ic=사보타지 지도의 버튼 위치
+const DOOR_DEFS = {
+  cafeteria:   { n: '카페테리아', ic: [1620, 540], s: [[1165,248,1165,352],[1424,628,1500,628],[1760,248,1760,346]] },
+  upperEngine: { n: '위쪽 엔진', ic: [560, 230], s: [[700,248,700,352]] },
+  lowerEngine: { n: '아래쪽 엔진', ic: [570, 890], s: [[700,940,700,1043]] },
+  security:    { n: '보안실', ic: [785, 735], s: [[690,603,690,705]] },
+  medbay:      { n: '의무실', ic: [960, 660], s: [[968,372,1042,372]] },
+  electrical:  { n: '전기실', ic: [1000, 1005], s: [[942,1108,1030,1108]] },
+  storage:     { n: '창고', ic: [1380, 1250], s: [[1222,1100,1222,1196]] }
+};
+const SAB_ICONS = [
+  { t: 'lights', e: '💡', x: 1150, y: 820, n: '전등 끄기' },
+  { t: 'o2', e: '💨', x: 1830, y: 560, n: '산소 차단' },
+  { t: 'reactor', e: '☢️', x: 330, y: 650, n: '원자로 멜트다운' },
+  { t: 'comms', e: '📡', x: 1750, y: 1235, n: '통신 장애' }
+];
+const CAMS = [{ n: '위쪽 복도', x: 1000, y: 300 }, { n: '원자로 복도', x: 585, y: 660 }, { n: '아래쪽 복도', x: 1050, y: 1145 }, { n: '조종실 복도', x: 2120, y: 610 }];
+
+const WALKABLE_POLYS = Object.values(RAW_WALKABLE).map(poly => poly.map(([x, y]) => ({ x: x * REF_SX, y: y * REF_SY })));
+
+function segmentParam(a, b, c, d) {
+  const rx = b.x - a.x, ry = b.y - a.y, sx = d.x - c.x, sy = d.y - c.y;
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / den;
+  const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den;
+  return (t > 0 && t < 1 && u >= 0 && u <= 1) ? t : null;
+}
+function buildWallSegments(polys) {
+  const walls = [];
+  for (let i = 0; i < polys.length; i++) {
+    const A = polys[i];
+    for (let k = 0; k < A.length; k++) {
+      const a = A[k], b = A[(k + 1) % A.length];
+      const cuts = [0, 1];
+      for (let j = 0; j < polys.length; j++) {
+        if (j === i) continue;
+        const B = polys[j];
+        for (let m = 0; m < B.length; m++) {
+          const t = segmentParam(a, b, B[m], B[(m + 1) % B.length]);
+          if (t !== null) cuts.push(t);
+        }
+      }
+      cuts.sort((p, q) => p - q);
+      for (let n = 0; n < cuts.length - 1; n++) {
+        const t0 = cuts[n], t1 = cuts[n + 1];
+        if (t1 - t0 < 1e-6) continue;
+        const tm = (t0 + t1) / 2;
+        const mid = { x: a.x + (b.x - a.x) * tm, y: a.y + (b.y - a.y) * tm };
+        let covered = false;
+        for (let j = 0; j < polys.length; j++) {
+          if (j !== i && isPointInPolygon(mid, polys[j])) { covered = true; break; }
+        }
+        if (!covered) walls.push({
+          p1: { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 },
+          p2: { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 }
+        });
+      }
+    }
+  }
+  return walls;
+}
+const WALL_SEGMENTS = buildWallSegments(WALKABLE_POLYS);
+const allSegs = () => closedSegs.length ? WALL_SEGMENTS.concat(closedSegs) : WALL_SEGMENTS;
+
+const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+const joystick = { active: false, dx: 0, dy: 0, startX: 0, startY: 0 };
+let localPlayer = { x: LOBBY_SPAWN.x, y: LOBBY_SPAWN.y, dir: 1, isMoving: false };
+
+function resetKeys() {
+  for (const k in keys) keys[k] = false;
+  if (joystick.active) {
+    joystick.active = false; joystick.dx = 0; joystick.dy = 0;
+    const k = document.getElementById('joystick-knob');
+    if (k) k.style.transform = 'translate(0px, 0px)';
+  }
+}
+window.addEventListener('blur', resetKeys);
+window.addEventListener('focus', resetKeys);
+document.addEventListener('visibilitychange', resetKeys);
+window.addEventListener('click', () => { window.focus(); });
+
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const maskCanvas = document.createElement('canvas');
+const mctx = maskCanvas.getContext('2d');
+function resizeCanvas() {
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  maskCanvas.width = window.innerWidth; maskCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function switchScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  if (id) document.getElementById(id).classList.add('active');
+}
+function handleAuth() {
+  if (document.getElementById('auth-code-input').value.trim() === '2026') switchScreen('screen-home');
+  else document.getElementById('auth-error').style.display = 'block';
+}
+function goToLobbyList() {
+  const nick = document.getElementById('player-nickname-input').value.trim();
+  if (nick.length < 2 || nick.length > 5) { document.getElementById('nickname-error').style.display = 'block'; return; }
+  document.getElementById('nickname-error').style.display = 'none';
+  myNickname = nick;
+  switchScreen('screen-rooms');
+}
+function handleCreateRoom() {
+  const name = document.getElementById('create-room-name').value.trim() || 'THE SKELD';
+  const max = parseInt(document.getElementById('create-room-max').value);
+  socket.emit('create_room', { roomName: name, maxPlayers: max, playerName: myNickname });
+}
+function joinRoom(id) { socket.emit('join_room', { roomId: id, playerName: myNickname }); }
+function handleStartGame() { socket.emit('start_game'); }
+
+socket.on('room_list', (list) => {
+  const container = document.getElementById('room-list-container');
+  container.innerHTML = '';
+  if (!list || list.length === 0) { container.innerHTML = '<div style="padding:16px; color:#64748b; text-align:center;">생성된 방이 없습니다.</div>'; return; }
+  list.forEach(r => {
+    const item = document.createElement('div');
+    item.className = 'room-item';
+    item.innerHTML = `<div><span style="font-weight:700;">${escapeHtml(r.name)}</span><span style="color:#0284c7; font-size:13px; margin-left:8px;">(${r.current}/${r.max})</span></div>
+      <button onclick="joinRoom('${r.id}')" ${r.current >= r.max || r.state !== 'LOBBY' ? 'disabled style="opacity:0.5;"' : ''}>참여하기</button>`;
+    container.appendChild(item);
+  });
+});
+
+socket.on('error_msg', m => alert(m));
+
+socket.on('room_joined', ({ roomId, room, myId: assignedId }) => {
+  myId = assignedId; currentRoom = room;
+  localPlayer.x = LOBBY_SPAWN.x; localPlayer.y = LOBBY_SPAWN.y;
+  switchScreen(null);
+  document.getElementById('in-game-ui').style.display = 'block';
+  updateRoomUI();
+});
+socket.on('room_update', (room) => { currentRoom = room; updateRoomUI(); });
+
+socket.on('player_moved', ({ id, x, y, dir, isMoving }) => {
+  if (currentRoom && currentRoom.players[id]) {
+    const p = currentRoom.players[id];
+    p.tx = x; p.ty = y; p.dir = dir; p.isMoving = isMoving;
+    if (p.x === undefined) { p.x = x; p.y = y; }
+  }
+});
+socket.on('player_vented', ({ id, inVent, x, y, ventId }) => {
+  const p = currentRoom && currentRoom.players[id];
+  if (!p) return;
+  const was = !!p.inVent;
+  p.inVent = inVent;
+  if (x && y) { p.x = p.tx = x; p.y = p.ty = y; }
+  if (ventId && inVent !== was) {            // 벤트 뚜껑 + 캐릭터 들어가고 나오는 모션 (다른 사람 화면에도)
+    ventLids[ventId] = inVent ? 25 : 20;
+    if (id !== myId) p.ventAnim = inVent ? 25 : -20;
+  }
+});
+socket.on('player_visual', ({ id, key }) => {
+  if (currentRoom && currentRoom.players[id]) currentRoom.players[id].visual = key;
+});
+
+socket.on('game_started', ({ players, imposterCount }) => {
+  currentRoom.players = players;
+  currentRoom.state = 'PLAYING';
+  bodies = []; isVented = false; currentVentId = null;
+  sabotageState = { type: null, doors: [], fixed: [], sw: [] }; closedSegs = [];
+  document.getElementById('sab-banner').style.display = 'none';
+  hideVentNav();
+  const me = players[myId];
+  role = me.role;
+  TaskSys.init(me.tasks);
+
+  const s = snapToValid(GAME_SPAWN.x, GAME_SPAWN.y);
+  localPlayer.x = s.x; localPlayer.y = s.y;
+  socket.emit('player_move', { x: s.x, y: s.y, dir: localPlayer.dir, isMoving: false });
+  lastKillStamp = Date.now();
+  document.getElementById('meeting-chat-log').innerHTML = '';
+  document.getElementById('start-btn-in-room').style.display = 'none';
+  document.getElementById('top-right-hud').style.display = 'flex';
+
+  const intro = document.getElementById('role-reveal-screen');
+  const title = document.getElementById('role-title');
+  const sub = document.getElementById('role-subtitle');
+  if (role === 'IMPOSTOR') {
+    title.innerText = '임포스터'; title.style.color = '#ef4444';
+    sub.innerText = `크루원을 처치하고 우주선을 점령하세요. (임포스터 ${imposterCount}명)`;
+  } else {
+    title.innerText = '크루원'; title.style.color = '#0284c7';
+    sub.innerText = `임포스터를 찾아 추방하고 미션을 완료하세요.`;
+  }
+  intro.style.display = 'flex';
+  setTimeout(() => { intro.style.display = 'none'; }, 3500);
+});
+
+socket.on('sabotage_updated', (s) => {
+  sabotageState = s;
+  doorReadyLocal = {};
+  Object.entries(s.dcd || {}).forEach(([k, ms]) => { doorReadyLocal[k] = Date.now() + ms; });
+  closedSegs = [];
+  (s.doors || []).forEach(k => DOOR_DEFS[k] && DOOR_DEFS[k].s.forEach(a =>
+    closedSegs.push({ p1: { x: a[0] * REF_SX, y: a[1] * REF_SY }, p2: { x: a[2] * REF_SX, y: a[3] * REF_SY } })));
+  const b = document.getElementById('sab-banner');
+  const L = { reactor: '☢️ 원자로 멜트다운', o2: '💨 산소 공급 차단', lights: '💡 전등 고장', comms: '📡 통신 장애' };
+  if (s.type) { b.style.display = 'block'; b.innerText = L[s.type] + (s.type === 'lights' || s.type === 'comms' ? '' : ` ${s.left}초`); }
+  else b.style.display = 'none';
+  document.getElementById('sab-flash').style.display = (critSab() && currentRoom && currentRoom.state === 'PLAYING') ? 'block' : 'none';
+  TaskSys.onSab();
+  updateSabIcons();
+});
+socket.on('cctv_count', n => { cctvCount = n; });
+
+socket.on('player_killed', ({ victimId, killerId, body }) => {
+  bodies.push(body);
+  if (currentRoom && currentRoom.players[victimId]) { currentRoom.players[victimId].isAlive = false; currentRoom.players[victimId].visual = null; }
+  if (victimId === myId) { TaskSys.close(); closeAdminMap(); closeCams(); }
+});
+
+// 회의 시작 연출 (2초)
+socket.on('meeting_intro', ({ callerName, callerColor, type }) => {
+  TaskSys.close(); closeAdminMap(); closeCams();
+  document.getElementById('sab-flash').style.display = 'none';
+  currentRoom.state = 'MEETING';
+  bodies = []; isVented = false; currentVentId = null;
+  hideVentNav(); resetKeys(); closeSabotageModal();
+  document.getElementById('map-modal').style.display = 'none';
+  const dot = `<span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${callerColor};border:2px solid #fff;vertical-align:middle;margin-right:8px;"></span>`;
+  document.getElementById('mi-title').innerText = type === 'REPORT' ? 'DEAD BODY REPORTED' : 'EMERGENCY MEETING';
+  document.getElementById('mi-sub').innerHTML = `${dot}${escapeHtml(callerName)} ${type === 'REPORT' ? '이(가) 시체를 발견했습니다!' : '이(가) 긴급회의를 소집했습니다!'}`;
+  document.getElementById('meeting-intro-screen').style.display = 'flex';
+  setTimeout(() => { document.getElementById('meeting-intro-screen').style.display = 'none'; }, 2000);
+});
+
+socket.on('meeting_started', ({ players, phase, timeLeft }) => {
+  document.getElementById('meeting-intro-screen').style.display = 'none';
+  TaskSys.close();
+  currentRoom.players = players;
+  currentRoom.state = 'MEETING';
+  bodies = []; isVented = false; currentVentId = null;
+  hideVentNav(); resetKeys();
+
+  const modal = document.getElementById('meeting-modal');
+  const grid = document.getElementById('voter-list');
+  document.getElementById('chat-modal').style.display = 'none';
+  const meAlive = players[myId].isAlive;
+  const ci = document.getElementById('chat-input');
+  ci.disabled = !meAlive;
+  ci.placeholder = meAlive ? '채팅 입력 (100자 이내)...' : '유령은 채팅할 수 없습니다';
+
+  grid.innerHTML = '';
+  document.getElementById('skip-voters-box').innerHTML = '';
+  Object.values(players).forEach(p => {
+    const card = document.createElement('div');
+    card.id = `voter-card-${p.id}`;
+    card.className = `voter-card ${p.isAlive ? '' : 'dead'} locked`;
+    card.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="width:20px; height:20px; border-radius:50%; background:${p.color}; border:2px solid #000;"></div>
+        <span style="font-size:15px; font-weight:bold; color:#0f172a;">${escapeHtml(p.name)} ${p.id === myId ? '(나)' : ''}</span>
+        <span id="voted-badge-${p.id}" class="voted-badge" style="display:none;">투표완료</span>
+      </div>
+      <div id="voted-by-${p.id}" class="voted-by-container"></div>`;
+    card.onclick = () => castVote(p.id);
+    grid.appendChild(card);
+  });
+  document.getElementById('skip-vote-btn').className = 'skip-btn locked';
+  document.getElementById('meeting-timer-box').innerText = `토론 시간: ${timeLeft}s`;
+  modal.style.display = 'flex';
+});
+
+socket.on('meeting_phase_change', ({ phase, timeLeft }) => {
+  document.getElementById('meeting-timer-box').innerText = `투표 시간: ${timeLeft}s`;
+  if (currentRoom.players[myId].isAlive) {
+    document.querySelectorAll('.voter-card').forEach(c => { if (!c.classList.contains('dead')) c.classList.remove('locked'); });
+    document.getElementById('skip-vote-btn').classList.remove('locked');
+  }
+});
+socket.on('meeting_timer_tick', ({ phase, timeLeft }) => {
+  document.getElementById('meeting-timer-box').innerText = `${phase === 'DISCUSS' ? '토론 시간' : '투표 시간'}: ${timeLeft}s`;
+});
+socket.on('vote_status', ({ voterId }) => {
+  const badge = document.getElementById(`voted-badge-${voterId}`);
+  if (badge) badge.style.display = 'inline-block';
+});
+socket.on('meeting_reveal', ({ votes }) => {
+  document.getElementById('meeting-timer-box').innerText = `투표 집계 중...`;
+  document.querySelectorAll('.voter-card').forEach(c => c.classList.add('locked'));
+  document.getElementById('skip-vote-btn').classList.add('locked');
+  for (const voterId in votes) {
+    const targetId = votes[voterId];
+    const voter = currentRoom.players[voterId];
+    if (!voter) continue;
+    const marker = document.createElement('div');
+    marker.className = 'vote-mini-marker';
+    marker.style.background = voter.color; marker.title = voter.name; marker.textContent = voter.name[0];
+    if (targetId === 'SKIP') document.getElementById('skip-voters-box').appendChild(marker);
+    else { const c = document.getElementById(`voted-by-${targetId}`); if (c) c.appendChild(marker); }
+  }
+});
+socket.on('meeting_ejection', ({ ejectedPlayer, isTie, reason, impLeft }) => {
+  document.getElementById('meeting-modal').style.display = 'none';
+  const screen = document.getElementById('ejection-screen');
+  const text = document.getElementById('ejection-text');
+  if (isTie || !ejectedPlayer) text.innerText = reason === 'TIE' ? '동점으로 아무도 방출되지 않았습니다.' : '건너뛰기로 아무도 방출되지 않았습니다.';
+  else text.innerText = `${ejectedPlayer.name} 은(는) ${ejectedPlayer.role === 'IMPOSTOR' ? '임포스터였습니다.' : '임포스터가 아니었습니다.'}`;
+  text.style.whiteSpace = 'pre-line';
+  text.innerText += `\n남은 임포스터 ${impLeft}명`;
+  screen.style.display = 'flex';
+  setTimeout(() => { screen.style.display = 'none'; }, 4000);
+});
+socket.on('resume_game', ({ players }) => {
+  currentRoom.players = players;
+  currentRoom.state = 'PLAYING';
+  const s = snapToValid(players[myId].x, players[myId].y);
+  localPlayer.x = s.x; localPlayer.y = s.y;
+  socket.emit('player_move', { x: s.x, y: s.y, dir: localPlayer.dir, isMoving: false });
+  lastKillStamp = Date.now();
+  resetKeys();
+});
+socket.on('game_over', ({ winner, reason, players }) => {
+  TaskSys.close(); closeAdminMap(); closeCams(); closeSabotageModal();
+  ['meeting-modal', 'map-modal', 'ejection-screen', 'meeting-intro-screen', 'sab-flash'].forEach(id => document.getElementById(id).style.display = 'none');
+  const win = role === winner;
+  const t = document.getElementById('go-title');
+  t.innerText = win ? 'VICTORY' : 'DEFEAT';
+  t.style.color = win ? '#facc15' : '#ef4444';
+  document.getElementById('go-sub').innerText = `${winner === 'IMPOSTOR' ? '임포스터 승리' : '크루원 승리'} — ${reason}`;
+  const c = document.getElementById('go-canvas'), g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const ws = (players || []).filter(p => p.role === winner), n = Math.max(1, ws.length), gap = Math.min(130, 760 / n);
+  ws.forEach((p, i) => {
+    g.save(); g.translate(400 + (i - (n - 1) / 2) * gap, 150); g.scale(1.8, 1.8);
+    drawCrewmate(g, 0, 0, p.color, p.name, false, 1, false, true, false, 0, 0);
+    g.restore();
+  });
+  document.getElementById('gameover-screen').style.display = 'flex';
+  setTimeout(() => location.reload(), 12000);
+});
+
+function castVote(targetId) {
+  if (!currentRoom.players[myId].isAlive) return;
+  socket.emit('cast_vote', { targetId });
+  document.querySelectorAll('.voter-card').forEach(c => c.classList.add('locked'));
+  document.getElementById('skip-vote-btn').classList.add('locked');
+}
+function toggleChatModal() {
+  const modal = document.getElementById('chat-modal');
+  const isShow = modal.style.display === 'flex';
+  modal.style.display = isShow ? 'none' : 'flex';
+  if (!isShow) {
+    const log = document.getElementById('meeting-chat-log');
+    log.scrollTop = log.scrollHeight;
+    document.getElementById('chat-input').focus();
+  }
+}
+function handleChatKeyDown(e) {
+  if (e.key === 'Enter') { if (e.isComposing || e.keyCode === 229) return; sendMeetingChat(); }
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function sendMeetingChat() {
+  if (!currentRoom.players[myId].isAlive) return;
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  const now = Date.now();
+  if (now - lastChatTime < 2000) {
+    alert(`채팅은 2초마다 보낼 수 있습니다. (${((2000 - (now - lastChatTime)) / 1000).toFixed(1)}초 남음)`);
+    return;
+  }
+  if (text.length > 100) { alert('채팅은 100자 이내로 입력해주세요.'); return; }
+  lastChatTime = now;
+  socket.emit('meeting_chat', text);
+  input.value = '';
+}
+socket.on('new_meeting_chat', ({ senderId, senderName, senderColor, isAlive, hasVoted, text }) => {
+  const log = document.getElementById('meeting-chat-log');
+  const isMine = (senderId === myId);
+  const row = document.createElement('div');
+  row.className = `chat-row ${isMine ? 'mine' : 'other'}`;
+  const tag = hasVoted ? '<span class="chat-voted-tag">투표완료</span>' : '';
+  const senderHtml = isMine
+    ? `<div class="chat-sender-info">${tag}<span style="font-weight:bold; color:#64748b;">나</span></div>`
+    : `<div class="chat-sender-info">
+        <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${senderColor}; border:1px solid #000;"></span>
+        <span style="font-weight:bold; color:#334155;">${escapeHtml(senderName)}${isAlive ? '' : ' 👻'}</span>${tag}</div>`;
+  row.innerHTML = `${senderHtml}<div class="chat-bubble ${isMine ? 'mine' : 'other'}">${escapeHtml(text)}</div>`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+});
+
+// ───── 액션 ─────
+const critSab = () => sabotageState.type === 'reactor' || sabotageState.type === 'o2';
+function nearTable() {
+  const me = currentRoom && currentRoom.players[myId];
+  return !!me && me.isAlive && !critSab() && Math.hypot(TABLE.x - localPlayer.x, TABLE.y - localPlayer.y) < 300;
+}
+const sabCdSec = () => Math.ceil((sabotageState.cd || 0) / 1000);
+const sabReady = () => !sabotageState.type && (sabotageState.cd || 0) <= 0;
+const doorRem = (k) => Math.max(0, Math.ceil(((doorReadyLocal[k] || 0) - Date.now()) / 1000));
+const doorReady = (k) => doorRem(k) <= 0 && !(sabotageState.doors || []).includes(k) && !critSab();
+const anyDoorReady = () => Object.keys(DOOR_DEFS).some(doorReady);
+const ADMIN_MAP = { x: 1745 * REF_SX, y: 838 * REF_SY };
+function nearAdmin() {
+  const me = currentRoom && currentRoom.players[myId];
+  return !!me && me.isAlive && !isVented && currentRoom.state === 'PLAYING' && Math.hypot(ADMIN_MAP.x - localPlayer.x, ADMIN_MAP.y - localPlayer.y) < 260;
+}
+
+function triggerKill() {
+  if (role !== 'IMPOSTOR' || !currentRoom.players[myId].isAlive || isVented) return;
+  const target = getNearestAliveCrewmate();
+  if (target) socket.emit('kill_player', { targetId: target.id });
+}
+function triggerReport() { socket.emit('report_body'); }
+function triggerUse() {
+  if (TaskSys.tryUse()) return;
+  if (nearTable() && !isVented) socket.emit('call_meeting');
+  else if (nearAdmin()) openAdminMap();
+  else if (nearSec()) openCams();
+}
+function triggerSabotageOrUse() {
+  if (TaskSys.tryUse()) return;
+  if (nearTable() || nearAdmin() || nearSec()) triggerUse();
+  else if (sabReady() || anyDoorReady()) openSabotageModal();
+}
+
+function triggerVent() {
+  if (role !== 'IMPOSTOR' || !currentRoom.players[myId].isAlive) return;
+  if (!isVented) {
+    const nearVent = getNearestVent();
+    if (!nearVent) return;
+    isVented = true; currentVentId = nearVent.id; ventLids[nearVent.id] = 25; ventAnimTick = 25; ventAnimDir = 1;
+    localPlayer.x = nearVent.x; localPlayer.y = nearVent.y;
+    socket.emit('toggle_vent', { inVent: true, x: nearVent.x, y: nearVent.y, ventId: nearVent.id });
+    showVentNav(nearVent);
+  } else {
+    const exitId = currentVentId;
+    isVented = false; ventLids[exitId] = 20; ventAnimTick = 20; ventAnimDir = -1;
+    const spot = snapToValid(localPlayer.x, localPlayer.y);
+    localPlayer.x = spot.x; localPlayer.y = spot.y;
+    socket.emit('toggle_vent', { inVent: false, x: localPlayer.x, y: localPlayer.y, ventId: exitId });
+    hideVentNav(); currentVentId = null;
+  }
+}
+function showVentNav(curVent) {
+  const nav = document.getElementById('vent-nav-ui');
+  nav.innerHTML = ''; nav.style.display = 'block';
+  curVent.connections.forEach(targetId => {
+    const tv = REAL_SKELD_VENTS.find(v => v.id === targetId);
+    if (!tv) return;
+    const angle = Math.atan2(tv.y - curVent.y, tv.x - curVent.x);
+    const dist = 145;
+    const btn = document.createElement('div');
+    btn.className = 'vent-arrow-btn';
+    btn.style.left = `calc(50% + ${Math.cos(angle) * dist}px)`;
+    btn.style.top = `calc(50% + ${Math.sin(angle) * dist}px)`;
+    btn.style.transform = `translate(-50%, -50%) rotate(${angle}rad)`;
+    btn.innerHTML = `<svg viewBox="0 0 60 60"><polygon points="54,30 14,10 22,30 14,50" fill="#38fedc" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" /></svg>`;
+    btn.onclick = (e) => { e.stopPropagation(); travelToVent(tv); };
+    nav.appendChild(btn);
+  });
+}
+function travelToVent(tv) {
+  currentVentId = tv.id; localPlayer.x = tv.x; localPlayer.y = tv.y; ventAnimTick = 0;
+  socket.emit('toggle_vent', { inVent: true, x: tv.x, y: tv.y, ventId: tv.id });
+  showVentNav(tv);
+}
+function hideVentNav() {
+  const nav = document.getElementById('vent-nav-ui');
+  nav.style.display = 'none'; nav.innerHTML = '';
+}
+
+// ───── 사보타지 모달 (직접 X로 닫을 때까지 유지) ─────
+function openSabotageModal() {
+  const box = document.getElementById('sabotage-box');
+  box.querySelectorAll('.sab-icon').forEach(e => e.remove());
+  sabIconRefs = [];
+  const add = (emoji, x, y, title, cls, offFn, remFn, fn) => {
+    const d = document.createElement('div');
+    d.className = 'sab-icon ' + cls;
+    d.style.left = `calc(${x / REF_W * 100}% - 20px)`;
+    d.style.top = `calc(${y / REF_H * 100}% - 20px)`;
+    d.title = title; d.onclick = fn;
+    box.appendChild(d);
+    sabIconRefs.push({ d, emoji, offFn, remFn });
+  };
+  SAB_ICONS.forEach(i => add(i.e, i.x, i.y, i.n, '', () => !sabReady(), () => sabotageState.type ? 0 : sabCdSec(), () => triggerSabotageAction(i.t)));
+  Object.entries(DOOR_DEFS).forEach(([k, d]) => add('🚪', d.ic[0], d.ic[1], d.n + ' 문 닫기', 'door', () => !doorReady(k), () => doorRem(k), () => triggerSabotageAction('doors', k)));
+  document.getElementById('sabotage-modal').style.display = 'flex';
+  updateSabIcons();
+}
+function updateSabIcons() {
+  if (document.getElementById('sabotage-modal').style.display !== 'flex') return;
+  sabIconRefs.forEach(r => {
+    const off = r.offFn(), rem = r.remFn();
+    r.d.classList.toggle('off', off);
+    const txt = (off && rem > 0) ? String(rem) : r.emoji;
+    if (r.d.textContent !== txt) r.d.textContent = txt;
+  });
+}
+function closeSabotageModal() { document.getElementById('sabotage-modal').style.display = 'none'; }
+function triggerSabotageAction(type, door) { socket.emit('trigger_sabotage', { type, door }); }
+
+// ───── 관리실 지도: 어느 방에 누가 있는지만 표시 (정확한 위치 X) ─────
+const ROOM_POLYS = Object.entries(RAW_WALKABLE).filter(([k]) => !k.startsWith('hall')).map(([k, p]) => ({
+  poly: p.map(([x, y]) => ({ x: x * REF_SX, y: y * REF_SY })),
+  cx: p.reduce((a, q) => a + q[0], 0) / p.length, cy: p.reduce((a, q) => a + q[1], 0) / p.length
+}));
+function openAdminMap() { adminOpen = true; resetKeys(); document.getElementById('admin-modal').style.display = 'flex'; }
+function closeAdminMap() { adminOpen = false; document.getElementById('admin-modal').style.display = 'none'; }
+function renderAdmin() {
+  const c = document.getElementById('admin-canvas'), g = c.getContext('2d');
+  if (c.width !== c.offsetWidth || c.height !== c.offsetHeight) { c.width = c.offsetWidth; c.height = c.offsetHeight; }
+  g.clearRect(0, 0, c.width, c.height);
+  if (skeldMapImg.complete && skeldMapImg.naturalWidth > 0) g.drawImage(skeldMapImg, 0, 0, c.width, c.height);
+  g.fillStyle = 'rgba(15,23,42,.55)'; g.fillRect(0, 0, c.width, c.height);
+  if (sabotageState.type === 'comms') {
+    g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#ef4444'; g.font = '32px "Fredoka One"'; g.textAlign = 'center'; g.fillText('📡 통신 장애', c.width / 2, c.height / 2);
+    return;
+  }
+  const per = new Map();
+  Object.values(currentRoom.players).forEach(p => {
+    if (!p.isAlive || p.inVent) return;
+    const pos = p.id === myId ? localPlayer : p;
+    const r = ROOM_POLYS.find(rm => isPointInPolygon(pos, rm.poly));
+    if (!r) return;
+    if (!per.has(r)) per.set(r, []);
+    per.get(r).push({ col: p.color });
+  });
+  bodies.forEach(bd => {  // 시체도 표시
+    const r = ROOM_POLYS.find(rm => isPointInPolygon(bd, rm.poly));
+    if (!r) return;
+    if (!per.has(r)) per.set(r, []);
+    per.get(r).push({ col: bd.color, dead: true });
+  });
+  per.forEach((items, r) => {
+    const cx = r.cx / REF_W * c.width, cy = r.cy / REF_H * c.height, step = 24, perRow = 4;
+    items.forEach((it, i) => {
+      const row = Math.floor(i / perRow), inRow = Math.min(perRow, items.length - row * perRow), idx = i % perRow;
+      const x = cx + (idx - (inRow - 1) / 2) * step, y = cy + row * step;
+      g.beginPath(); g.arc(x, y, 10, 0, Math.PI * 2);
+      g.fillStyle = it.col; g.fill(); g.lineWidth = 3; g.strokeStyle = it.dead ? '#ef4444' : '#000'; g.stroke();
+      if (it.dead) { g.fillStyle = '#fff'; g.font = '13px sans-serif'; g.textAlign = 'center'; g.fillText('☠', x, y + 5); }
+    });
+  });
+}
+
+// ───── 보안 카메라 (CCTV) ─────
+const SEC_CONSOLE = { x: 832 * REF_SX, y: 668 * REF_SY };
+function nearSec() {
+  const me = currentRoom && currentRoom.players[myId];
+  return !!me && me.isAlive && !isVented && currentRoom.state === 'PLAYING' && Math.hypot(SEC_CONSOLE.x - localPlayer.x, SEC_CONSOLE.y - localPlayer.y) < 260;
+}
+function openCams() { camOpen = true; resetKeys(); socket.emit('cctv', { on: true }); document.getElementById('cam-modal').style.display = 'flex'; }
+function closeCams() {
+  if (!camOpen) return;
+  camOpen = false; socket.emit('cctv', { on: false });
+  document.getElementById('cam-modal').style.display = 'none';
+}
+function renderCams() {
+  const off = sabotageState.type === 'comms';
+  document.querySelectorAll('#cam-modal .cam-c').forEach((c, i) => {
+    const g = c.getContext('2d'), cam = CAMS[i], W = c.width, H = c.height;
+    if (off) {
+      g.fillStyle = '#111'; g.fillRect(0, 0, W, H);
+      for (let n = 0; n < 500; n++) { g.fillStyle = `rgba(255,255,255,${Math.random() * .5})`; g.fillRect(Math.random() * W, Math.random() * H, 3, 2); }
+      g.fillStyle = '#ef4444'; g.font = '22px "Fredoka One"'; g.textAlign = 'center'; g.fillText('📡 통신 장애', W / 2, H / 2);
+      return;
+    }
+    const vw = 1200, vh = vw * H / W, sc = W / vw, cx = cam.x * REF_SX, cy = cam.y * REF_SY;
+    g.save(); g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    g.scale(sc, sc); g.translate(-(cx - vw / 2), -(cy - vh / 2));
+    if (skeldMapImg.complete && skeldMapImg.naturalWidth > 0) g.drawImage(skeldMapImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
+    bodies.forEach(b => drawDeadBody(g, b.x, b.y, b.color));
+    Object.values(currentRoom.players).forEach(p => {
+      if (!p.isAlive || p.inVent) return;
+      const pos = p.id === myId ? localPlayer : p;
+      if (Math.abs(pos.x - cx) > vw / 2 || Math.abs(pos.y - cy) > vh / 2) return;
+      drawCrewmate(g, pos.x, pos.y, p.color, '', false, pos.dir || 1, pos.isMoving, true, false, 0, animTick);
+    });
+    g.restore();
+    g.fillStyle = 'rgba(0,255,120,.07)'; g.fillRect(0, 0, W, H);
+    g.fillStyle = (animTick % 60 < 40) ? '#ef4444' : 'rgba(239,68,68,.2)'; g.beginPath(); g.arc(18, 18, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.font = '16px "Fredoka One"'; g.textAlign = 'left'; g.fillText(`CAM ${i + 1} · ${cam.n}`, 32, 24);
+  });
+}
+// 누군가 카메라를 보면 맵의 카메라가 빨갛게 깜빡임
+function drawCamLights(c) {
+  if (cctvCount <= 0 || animTick % 50 > 30) return;
+  CAMS.forEach(cam => {
+    c.save(); c.fillStyle = '#ef4444'; c.strokeStyle = '#fff'; c.lineWidth = 3;
+    c.beginPath(); c.arc(cam.x * REF_SX, cam.y * REF_SY - 40, 12, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
+  });
+}
+// 원자로/산소: 수리 위치를 가리키는 빨강-노랑 화살표
+function drawSabArrows() {
+  if (!critSab()) return;
+  const me = currentRoom.players[myId];
+  if (!me || !me.isAlive) return;
+  const cw = canvas.width, ch = canvas.height, R = Math.min(cw, ch) / 2 - 70;
+  const col = (Math.floor(Date.now() / 350) % 2) ? '#ef4444' : '#facc15';
+  TaskSys.sabTargets().forEach(w => {
+    const dx = w.x - localPlayer.x, dy = w.y - localPlayer.y, d = Math.hypot(dx, dy);
+    if (d < 130) return;
+    const a = Math.atan2(dy, dx), r = Math.max(70, Math.min(R, d - 80));
+    ctx.save(); ctx.translate(cw / 2 + Math.cos(a) * r, ch / 2 + Math.sin(a) * r); ctx.rotate(a);
+    ctx.shadowColor = col; ctx.shadowBlur = 14; ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(34, 0); ctx.lineTo(-18, -24); ctx.lineTo(-6, 0); ctx.lineTo(-18, 24); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function toggleMapModal() {
+  const modal = document.getElementById('map-modal');
+  const isShow = modal.style.display === 'flex';
+  modal.style.display = isShow ? 'none' : 'flex';
+  if (!isShow) renderMinimap();
+}
+
+function getNearestAliveCrewmate() {
+  let nearest = null, minDist = 180;
+  Object.values(currentRoom.players).forEach(p => {
+    if (p.id !== myId && p.isAlive && p.role !== 'IMPOSTOR' && !p.inVent) {
+      if (hasLineOfSight(localPlayer.x, localPlayer.y, p.x, p.y)) {
+        const d = Math.hypot(p.x - localPlayer.x, p.y - localPlayer.y);
+        if (d < minDist) { minDist = d; nearest = p; }
+      }
+    }
+  });
+  return nearest;
+}
+function getNearestVent() {
+  return REAL_SKELD_VENTS.find(v => Math.hypot(v.x - localPlayer.x, v.y - localPlayer.y) < 45);
+}
+function updateRoomUI() {
+  if (!currentRoom) return;
+  const count = Object.keys(currentRoom.players).length;
+  document.getElementById('room-info-pill').innerText = `${currentRoom.name} | ${count}/${currentRoom.maxPlayers}`;
+  document.getElementById('start-btn-in-room').style.display = (currentRoom.hostId === myId && currentRoom.state === 'LOBBY') ? 'block' : 'none';
+}
+
+// ───── 충돌 ─────
+const WALL_MARGIN = 24;
+function isValidPosition(nx, ny, ox, oy) {
+  if (!currentRoom || currentRoom.state === 'LOBBY') return (nx >= 520 && nx <= 1880 && ny >= 600 && ny <= 1700);
+  const m0 = currentRoom.players[myId];
+  if (m0 && !m0.isAlive && currentRoom.state === 'PLAYING') return nx > 20 && ny > 20 && nx < MAP_WIDTH - 20 && ny < MAP_HEIGHT - 20; // 유령 벽 통과
+  const pt = { x: nx, y: ny };
+  if (!WALKABLE_POLYS.some(poly => isPointInPolygon(pt, poly))) return false;
+  for (const seg of WALL_SEGMENTS) if (distToSegment(pt, seg.p1, seg.p2) < WALL_MARGIN) return false;
+  for (const o of OBST) {
+    if (o.r !== undefined) { if (Math.hypot(nx - o.x, ny - o.y) < o.r + OB_M) return false; }
+    else if (nx > o.x0 - OB_M && nx < o.x1 + OB_M && ny > o.y0 - OB_M && ny < o.y1 + OB_M) return false;
+  }
+  for (const seg of closedSegs) {  // 닫힌 문 (문에 끼었을 땐 멀어지는 방향만 허용)
+    const d = distToSegment(pt, seg.p1, seg.p2);
+    if (d < WALL_MARGIN && (ox === undefined || d < distToSegment({ x: ox, y: oy }, seg.p1, seg.p2))) return false;
+  }
+  return true;
+}
+function snapToValid(x, y) {
+  if (isValidPosition(x, y)) return { x, y };
+  for (let r = 10; r <= 400; r += 10) {
+    for (let i = 0; i < 24; i++) {
+      const a = (Math.PI * 2 * i) / 24;
+      const nx = x + Math.cos(a) * r, ny = y + Math.sin(a) * r;
+      if (isValidPosition(nx, ny)) return { x: nx, y: ny };
+    }
+  }
+  return { x, y };
+}
+function distToSegment(p, v, w) {
+  const l2 = (v.x - w.x) ** 2 + (v.y - w.y) ** 2;
+  if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+  let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
+}
+function hasLineOfSight(x1, y1, x2, y2) {
+  for (const seg of allSegs()) if (getLineIntersection(x1, y1, x2, y2, seg.p1.x, seg.p1.y, seg.p2.x, seg.p2.y)) return false;
+  return true;
+}
+
+// ───── 그리기 ─────
+function drawVent(context, v) {
+  context.save();
+  context.translate(v.x, v.y);
+  const isOpen = (ventLids[v.id] || 0) > 0;
+  const lidOffset = isOpen ? -20 : 0, lidAngle = isOpen ? -0.4 : 0;
+  context.fillStyle = '#06080e'; context.strokeStyle = '#1b2631'; context.lineWidth = 4;
+  context.beginPath(); context.roundRect(-36, -24, 72, 48, 6); context.fill(); context.stroke();
+  context.save();
+  context.translate(0, lidOffset); context.rotate(lidAngle);
+  context.fillStyle = '#566573'; context.strokeStyle = '#17202a'; context.lineWidth = 5;
+  context.beginPath(); context.roundRect(-36, -24, 72, 48, 6); context.fill(); context.stroke();
+  context.fillStyle = '#85929e'; context.strokeStyle = '#111'; context.lineWidth = 2;
+  for (let vy = -11; vy <= 11; vy += 7.5) { context.fillRect(-26, vy, 52, 3.5); context.strokeRect(-26, vy, 52, 3.5); }
+  context.restore();
+  context.restore();
+}
+
+function drawDoors(c) {
+  closedSegs.forEach(s => {
+    c.save(); c.lineCap = 'round';
+    c.strokeStyle = '#7f1d1d'; c.lineWidth = 18; c.beginPath(); c.moveTo(s.p1.x, s.p1.y); c.lineTo(s.p2.x, s.p2.y); c.stroke();
+    c.strokeStyle = '#ef4444'; c.lineWidth = 8; c.setLineDash([14, 10]); c.stroke();
+    c.restore();
+  });
+}
+
+// 미션 하는 모습 (스캔/소행성/쉴드/쓰레기)
+function drawTaskFx(c, p, tick) {
+  if (!p.visual || !p.isAlive) return;
+  c.save(); c.translate(p.x, p.y);
+  if (p.visual === 'scan') {
+    c.fillStyle = 'rgba(74,222,128,.25)'; c.fillRect(-48, -70, 96, 130);
+    c.fillStyle = 'rgba(134,239,172,.95)'; c.fillRect(-48, -70 + ((tick * 3) % 126), 96, 5);
+  } else if (p.visual === 'asteroids') {
+    c.strokeStyle = '#f87171'; c.lineWidth = 5; c.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const a = tick * 0.12 + i * 2.1, r0 = 40 + ((tick * 7 + i * 50) % 140);
+      c.beginPath(); c.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); c.lineTo(Math.cos(a) * (r0 + 28), Math.sin(a) * (r0 + 28)); c.stroke();
+    }
+  } else if (p.visual === 'shields') {
+    const r = 56 + Math.sin(tick * 0.15) * 6;
+    c.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i + tick * 0.02; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); } c.closePath();
+    c.fillStyle = 'rgba(56,189,248,.2)'; c.fill(); c.strokeStyle = '#38bdf8'; c.lineWidth = 5; c.stroke();
+  } else if (p.visual === 'garbage') {
+    c.fillStyle = '#4ade80';
+    for (let i = 0; i < 5; i++) c.fillRect(-30 + i * 15, -70 + ((tick * 4 + i * 25) % 90), 8, 18);
+  }
+  c.restore();
+}
+
+function drawCrewmate(context, x, y, color, name, isMe, dir, isMoving, isAlive, inVent, animState, tick) {
+  if (inVent && animState <= 0) return;
+  context.save();
+  context.translate(x, y);
+  if (!isAlive) context.globalAlpha = 0.5;
+  let scaleMod = 1.15;
+  if (animState > 0) scaleMod *= animState / 25;          // 들어가는 중: 작아짐
+  else if (animState < 0) scaleMod *= 1 + animState / 25; // 나오는 중: 커짐
+  context.scale(dir * scaleMod, scaleMod);
+  const bounce = (isMoving && isAlive) ? Math.sin(tick * 0.3) * 3 : 0;
+
+  context.fillStyle = color; context.strokeStyle = '#000'; context.lineWidth = 4;
+  context.beginPath(); context.roundRect(-24, -20 + bounce, 12, 34, 6); context.fill(); context.stroke();
+  context.beginPath();
+  context.arc(0, -14 + bounce, 18, Math.PI, 0, false);
+  context.lineTo(18, 14 + bounce); context.lineTo(6, 26 + bounce); context.lineTo(2, 14 + bounce);
+  context.lineTo(-6, 26 + bounce); context.lineTo(-18, 14 + bounce);
+  context.closePath(); context.fill(); context.stroke();
+  context.fillStyle = '#8ce8ff';
+  context.beginPath(); context.ellipse(8, -12 + bounce, 13, 8, 0, 0, Math.PI * 2); context.fill(); context.stroke();
+  context.fillStyle = '#fff';
+  context.beginPath(); context.ellipse(6, -14 + bounce, 6, 2.5, -0.2, 0, Math.PI * 2); context.fill();
+  context.restore();
+
+  context.save();
+  context.font = '15px "Fredoka One", sans-serif';
+  context.textAlign = 'center';
+  context.fillStyle = isMe ? (role === 'IMPOSTOR' ? '#ef4444' : '#0284c7') : '#0f172a';
+  context.strokeStyle = '#ffffff'; context.lineWidth = 4;
+  context.strokeText(name, x, y - 44); context.fillText(name, x, y - 44);
+  context.restore();
+}
+
+function drawDeadBody(context, x, y, color) {
+  context.save();
+  context.translate(x, y); context.scale(1.15, 1.15);
+  context.fillStyle = color; context.strokeStyle = '#000'; context.lineWidth = 4;
+  context.beginPath(); context.roundRect(-18, -4, 36, 20, 6); context.fill(); context.stroke();
+  context.fillStyle = '#fff';
+  context.beginPath(); context.arc(-4, -14, 5, 0, Math.PI * 2); context.arc(4, -14, 5, 0, Math.PI * 2); context.rect(-3, -12, 6, 12);
+  context.fill(); context.stroke();
+  context.restore();
+}
+
+function raySegmentDistance(px, py, dx, dy, seg) {
+  const sx = seg.p2.x - seg.p1.x, sy = seg.p2.y - seg.p1.y;
+  const den = dx * sy - dy * sx;
+  if (Math.abs(den) < 1e-9) return Infinity;
+  const qx = seg.p1.x - px, qy = seg.p1.y - py;
+  const t = (qx * sy - qy * sx) / den;
+  const u = (qx * dy - qy * dx) / den;
+  return (t >= 0 && u >= -1e-9 && u <= 1 + 1e-9) ? t : Infinity;
+}
+function getVisibilityPolygon(px, py, radius) {
+  const origin = { x: px, y: py };
+  const nearby = allSegs().filter(seg => distToSegment(origin, seg.p1, seg.p2) <= radius);
+  const EPS = 0.0001, angles = [];
+  for (const seg of nearby) for (const p of [seg.p1, seg.p2]) {
+    const a = Math.atan2(p.y - py, p.x - px);
+    angles.push(a - EPS, a, a + EPS);
+  }
+  const BASE_RAYS = 96;
+  for (let i = 0; i < BASE_RAYS; i++) angles.push(-Math.PI + (Math.PI * 2 * i) / BASE_RAYS);
+  angles.sort((a, b) => a - b);
+  const poly = [];
+  for (const ang of angles) {
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    let nearest = radius;
+    for (const seg of nearby) { const t = raySegmentDistance(px, py, dx, dy, seg); if (t < nearest) nearest = t; }
+    poly.push({ x: px + dx * nearest, y: py + dy * nearest });
+  }
+  return poly;
+}
+function getLineIntersection(p0_x, p0_y, p1_x, p1_y, p2_x, p2_y, p3_x, p3_y) {
+  const s1_x = p1_x - p0_x, s1_y = p1_y - p0_y, s2_x = p3_x - p2_x, s2_y = p3_y - p2_y;
+  const s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y);
+  const t = (s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y);
+  if (s >= 0 && s <= 1 && t >= 0 && t <= 1) return { x: p0_x + (t * s1_x), y: p0_y + (t * s1_y) };
+  return null;
+}
+function isPointInPolygon(point, vs) {
+  const x = point.x, y = point.y;
+  let inside = false;
+  for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+    const xi = vs[i].x, yi = vs[i].y, xj = vs[j].x, yj = vs[j].y;
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+function renderMinimap() {
+  const mCanvas = document.getElementById('minimap-canvas');
+  const mCtx = mCanvas.getContext('2d');
+  mCanvas.width = mCanvas.offsetWidth; mCanvas.height = mCanvas.offsetHeight;
+  const scaleX = mCanvas.width / MAP_WIDTH, scaleY = mCanvas.height / MAP_HEIGHT;
+  mCtx.fillStyle = '#ffffff'; mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height);
+  if (skeldMapImg.complete && skeldMapImg.naturalWidth > 0) {
+    mCtx.imageSmoothingEnabled = false;
+    mCtx.drawImage(skeldMapImg, 0, 0, MAP_WIDTH * scaleX, MAP_HEIGHT * scaleY);
+  }
+  mCtx.fillStyle = '#ef4444';
+  mCtx.beginPath(); mCtx.arc(localPlayer.x * scaleX, localPlayer.y * scaleY, 7, 0, Math.PI * 2); mCtx.fill();
+}
+
+// e.code 기반: 한글 입력/CapsLock/Shift 상태에서도 WASD·방향키 정상 동작
+const KEYMAP = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', ArrowUp: 'ArrowUp', ArrowLeft: 'ArrowLeft', ArrowDown: 'ArrowDown', ArrowRight: 'ArrowRight' };
+window.addEventListener('keydown', (e) => {
+  const k = KEYMAP[e.code];
+  if (!k || (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName))) return;
+  keys[k] = true; e.preventDefault();
+});
+window.addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
+
+const joyZone = document.getElementById('joystick-zone');
+const joyKnob = document.getElementById('joystick-knob');
+function joyUpdate(t) {
+  const dx = t.clientX - joystick.startX, dy = t.clientY - joystick.startY, dist = Math.hypot(dx, dy), max = 40;
+  if (dist > 0) {
+    joystick.dx = (dx / dist) * Math.min(dist / max, 1);
+    joystick.dy = (dy / dist) * Math.min(dist / max, 1);
+    joyKnob.style.transform = `translate(${joystick.dx * max}px, ${joystick.dy * max}px)`;
+  }
+}
+function joyEnd() {
+  joystick.active = false; joystick.id = null; joystick.dx = 0; joystick.dy = 0;
+  joyKnob.style.transform = 'translate(0px, 0px)';
+}
+joyZone.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (joystick.active) return;
+  const t = e.changedTouches[0], rc = joyZone.getBoundingClientRect();
+  joystick.active = true; joystick.id = t.identifier;
+  joystick.startX = rc.left + rc.width / 2; joystick.startY = rc.top + rc.height / 2;
+  joyUpdate(t);
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!joystick.active) return;
+  for (const t of e.changedTouches) if (t.identifier === joystick.id) { joyUpdate(t); break; }
+});
+const joyEndH = (e) => { for (const t of e.changedTouches) if (t.identifier === joystick.id) { joyEnd(); break; } };
+window.addEventListener('touchend', joyEndH);
+window.addEventListener('touchcancel', joyEndH);
+
+let animTick = 0, lastTs = 0, lastSend = 0, wasMoving = false;
+function gameLoop(ts) {
+  const dt = Math.min(3, lastTs ? (ts - lastTs) / 16.667 : 1); // 프레임 보정 (고주사율 모니터에서도 같은 속도)
+  const dms = lastTs ? ts - lastTs : 0;
+  lastTs = ts;
+  animTick++;
+  if (isVented) lastKillStamp += dms; // 벤트 안에서는 킬 쿨다운 정지
+  for (const k in ventLids) if (ventLids[k] > 0) ventLids[k]--;
+  if (currentRoom) Object.values(currentRoom.players).forEach(p => { if (p.ventAnim > 0) p.ventAnim--; else if (p.ventAnim < 0) p.ventAnim++; });
+  if (animTick % 15 === 0) updateSabIcons();
+  if (ventAnimTick > 0) ventAnimTick--;
+
+  let vx = 0, vy = 0;
+  if (keys.w || keys.ArrowUp) vy -= 1;
+  if (keys.s || keys.ArrowDown) vy += 1;
+  if (keys.a || keys.ArrowLeft) vx -= 1;
+  if (keys.d || keys.ArrowRight) vx += 1;
+  if (joystick.active) { vx += joystick.dx; vy += joystick.dy; }
+
+  const len = Math.hypot(vx, vy);
+  let moving = false;
+  if (len > 0.05 && currentRoom && (currentRoom.state === 'PLAYING' || currentRoom.state === 'LOBBY') && !isVented && !TaskSys.isOpen() && !adminOpen && !camOpen) {
+    const ox = localPlayer.x, oy = localPlayer.y;
+    const step = 6.4 * dt * Math.min(len, 1);
+    const nextX = ox + (vx / len) * step, nextY = oy + (vy / len) * step;
+    if (isValidPosition(nextX, oy, ox, oy)) localPlayer.x = nextX;
+    if (isValidPosition(localPlayer.x, nextY, localPlayer.x, oy)) localPlayer.y = nextY;
+    if (vx !== 0) localPlayer.dir = vx > 0 ? 1 : -1;
+    moving = localPlayer.x !== ox || localPlayer.y !== oy; // 벽에 막혀 제자리면 걷는 모션 X
+  }
+  localPlayer.isMoving = moving;
+
+  // 위치 전송: 이동 중엔 20Hz, 멈추는 순간엔 최종 위치 1회
+  const nowMs = performance.now();
+  if (currentRoom && (moving ? nowMs - lastSend >= 50 : wasMoving)) {
+    socket.emit('player_move', { x: localPlayer.x, y: localPlayer.y, dir: localPlayer.dir, isMoving: moving });
+    lastSend = nowMs;
+  }
+  wasMoving = moving;
+
+  // 다른 플레이어 부드럽게 보간
+  if (currentRoom) Object.values(currentRoom.players).forEach(p => {
+    if (p.id === myId || p.tx === undefined) return;
+    const k = Math.min(1, 0.3 * dt);
+    p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k;
+    if (Math.hypot(p.tx - p.x, p.ty - p.y) > 500) { p.x = p.tx; p.y = p.ty; }
+  });
+
+  if (currentRoom && currentRoom.state === 'PLAYING' && currentRoom.players[myId]) {
+    const killBtn = document.getElementById('btn-kill');
+    const sabBtn = document.getElementById('btn-sabotage');
+    const useBtn = document.getElementById('btn-use');
+    const ventBtn = document.getElementById('btn-vent');
+    const reportBtn = document.getElementById('btn-report');
+    const killOverlay = document.getElementById('kill-cooldown-num');
+    const sabOv = document.getElementById('sab-cooldown-num');
+    const alive = currentRoom.players[myId].isAlive;
+    const nearUse = nearTable() || nearAdmin() || nearSec() || !!TaskSys.nearest();
+
+    if (role === 'IMPOSTOR') {
+      useBtn.style.display = 'none';
+      sabBtn.style.display = 'block';
+      if (nearUse && !isVented) {
+        sabBtn.classList.add('btn-use'); sabBtn.classList.remove('btn-sabotage');
+        sabBtn.classList.add('active'); sabOv.style.display = 'none';
+      } else {
+        sabBtn.classList.add('btn-sabotage'); sabBtn.classList.remove('btn-use');
+        if (sabReady() || anyDoorReady()) { sabBtn.classList.add('active'); sabOv.style.display = 'none'; }
+        else {
+          sabBtn.classList.remove('active');
+          const cands = Object.keys(DOOR_DEFS).filter(k => !(sabotageState.doors || []).includes(k)).map(doorRem);
+          if (!sabotageState.type) cands.push(sabCdSec());
+          const rem = cands.length ? Math.min(...cands) : 0;
+          if (rem > 0) { sabOv.style.display = 'flex'; sabOv.innerText = rem; } else sabOv.style.display = 'none';
+        }
+      }
+
+      if (alive) {
+        killBtn.style.display = 'block';
+        const remainSec = Math.max(0, Math.ceil(killCooldown - (Date.now() - lastKillStamp) / 1000));
+        const target = getNearestAliveCrewmate();
+        if (remainSec === 0 && target && !isVented) { killBtn.classList.add('active'); killOverlay.style.display = 'none'; }
+        else {
+          killBtn.classList.remove('active');
+          if (remainSec > 0) { killOverlay.style.display = 'flex'; killOverlay.innerText = remainSec; }
+          else killOverlay.style.display = 'none';
+        }
+        ventBtn.style.display = 'block'; // 임포스터는 벤트 버튼 항상 표시 (가까울 때만 활성)
+        if (getNearestVent() || isVented) ventBtn.classList.add('active'); else ventBtn.classList.remove('active');
+      } else {
+        killBtn.style.display = 'none'; ventBtn.style.display = 'none';
+      }
+    } else {
+      killBtn.style.display = 'none'; sabBtn.style.display = 'none'; ventBtn.style.display = 'none';
+      useBtn.style.display = 'block';
+      if (nearUse) useBtn.classList.add('active'); else useBtn.classList.remove('active');
+    }
+
+    let canReport = false;
+    bodies.forEach(b => {
+      if (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) < 180 && hasLineOfSight(localPlayer.x, localPlayer.y, b.x, b.y)) canReport = true;
+    });
+    if (canReport && alive && !isVented) reportBtn.classList.add('active'); else reportBtn.classList.remove('active');
+  }
+
+  if (adminOpen && currentRoom) renderAdmin();
+  if (camOpen && currentRoom) renderCams();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (currentRoom) {
+    const camX = canvas.width / 2 - localPlayer.x;
+    const camY = canvas.height / 2 - localPlayer.y;
+    ctx.save();
+    ctx.translate(camX, camY);
+
+    if (currentRoom.state === 'LOBBY') {
+      if (waitShipImg.complete && waitShipImg.naturalWidth > 0) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(waitShipImg, 0, 0, LOBBY_RENDER_W, LOBBY_RENDER_H);
+      } else { ctx.fillStyle = '#222f3e'; ctx.fillRect(0, 0, LOBBY_RENDER_W, LOBBY_RENDER_H); }
+      Object.values(currentRoom.players).forEach(p => {
+        if (p.id !== myId) drawCrewmate(ctx, p.x, p.y, p.color, p.name, false, p.dir || 1, p.isMoving, p.isAlive, p.inVent, 0, animTick);
+      });
+    } else {
+      if (skeldMapImg.complete && skeldMapImg.naturalWidth > 0) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(skeldMapImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
+      } else { ctx.fillStyle = '#1e2837'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
+
+      REAL_SKELD_VENTS.forEach(v => drawVent(ctx, v));
+      drawDoors(ctx);
+      drawCamLights(ctx);
+      TaskSys.draw(ctx, animTick);
+
+      const me = currentRoom.players[myId];
+      const meDead = !!me && !me.isAlive;
+      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 400 : 800);
+      const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, visionRadius);
+
+      bodies.forEach(b => {
+        if (role === 'IMPOSTOR' || meDead || (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) <= visionRadius && isPointInPolygon(b, visiblePolygon))) drawDeadBody(ctx, b.x, b.y, b.color);
+      });
+
+      Object.values(currentRoom.players).forEach(p => {
+        if (p.id === myId) return;
+        if (!!p.isAlive === meDead) return; // 유령은 유령끼리만, 산 사람은 산 사람끼리만
+        const inDist = Math.hypot(p.x - localPlayer.x, p.y - localPlayer.y) <= visionRadius;
+        const isVisible = role === 'IMPOSTOR' || meDead || (inDist && isPointInPolygon(p, visiblePolygon));
+        if (isVisible) {
+          drawTaskFx(ctx, p, animTick);
+          drawCrewmate(ctx, p.x, p.y, p.color, p.name, false, p.dir || 1, p.isMoving, p.isAlive, p.inVent, p.ventAnim || 0, animTick);
+        }
+      });
+
+      // 안개
+      mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      mctx.save();
+      mctx.globalCompositeOperation = 'source-over';
+      mctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
+      mctx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+      mctx.globalCompositeOperation = 'destination-out';
+      const scrX = localPlayer.x + camX, scrY = localPlayer.y + camY;
+      const fade = mctx.createRadialGradient(scrX, scrY, visionRadius * 0.85, scrX, scrY, visionRadius);
+      fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+      mctx.fillStyle = fade;
+      mctx.beginPath();
+      mctx.moveTo(visiblePolygon[0].x + camX, visiblePolygon[0].y + camY);
+      for (let i = 1; i < visiblePolygon.length; i++) mctx.lineTo(visiblePolygon[i].x + camX, visiblePolygon[i].y + camY);
+      mctx.closePath(); mctx.fill();
+      mctx.restore();
+    }
+
+    const me = currentRoom.players[myId];
+    if (me) {
+      if (currentRoom.state !== 'LOBBY') drawTaskFx(ctx, me, animTick);
+      drawCrewmate(ctx, localPlayer.x, localPlayer.y, me.color, me.name, true, localPlayer.dir, localPlayer.isMoving, me.isAlive, isVented, ventAnimTick * ventAnimDir, animTick);
+    }
+    ctx.restore();
+
+    if (currentRoom.state === 'PLAYING') {
+      const m0 = currentRoom.players[myId];
+      if (!(m0 && !m0.isAlive)) ctx.drawImage(maskCanvas, 0, 0); // 유령은 안개 없음
+      ctx.save(); ctx.translate(camX, camY);                       // 열리는 벤트는 어두운 곳/벽 너머에서도 보이게
+      REAL_SKELD_VENTS.forEach(v => { if ((ventLids[v.id] || 0) > 0) drawVent(ctx, v); });
+      ctx.restore();
+      drawSabArrows();
+    }
+  }
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
