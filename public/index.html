@@ -487,6 +487,12 @@ function buildWallSegments(polys) {
   return walls;
 }
 const WALL_SEGMENTS = buildWallSegments(WALKABLE_POLYS);
+// [렉 수정] 벽 꼭짓점(중복 제거) — 시야 계산 속도 향상용
+const WALL_PTS = (() => {
+  const m = new Map();
+  WALL_SEGMENTS.forEach(s => [s.p1, s.p2].forEach(p => { const k = Math.round(p.x) * 100003 + Math.round(p.y); if (!m.has(k)) m.set(k, p); }));
+  return [...m.values()];
+})();
 const allSegs = () => closedSegs.length ? WALL_SEGMENTS.concat(closedSegs) : WALL_SEGMENTS;
 
 const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
@@ -1302,7 +1308,46 @@ function raySegmentDistance(px, py, dx, dy, seg) {
   const u = (qx * dy - qy * dx) / den;
   return (t >= 0 && u >= -1e-9 && u <= 1 + 1e-9) ? t : Infinity;
 }
+// [렉 수정] 시야 다각형: 같은 결과를 훨씬 가볍게 계산 + 안 움직이면 결과 재사용
+let visCache = { x: NaN, y: NaN, r: 0, doors: null, poly: null };
+let visBuf = { qx: new Float64Array(1024), qy: new Float64Array(1024), sx: new Float64Array(1024), sy: new Float64Array(1024) };
 function getVisibilityPolygon(px, py, radius) {
+  if (visCache.poly && visCache.doors === closedSegs && visCache.r === radius && Math.abs(visCache.x - px) < 0.01 && Math.abs(visCache.y - py) < 0.01) return visCache.poly;
+  const origin = { x: px, y: py }, r2 = radius * radius;
+  const all = allSegs(), n0 = all.length;
+  if (visBuf.qx.length < n0) { const L = n0 * 2; visBuf = { qx: new Float64Array(L), qy: new Float64Array(L), sx: new Float64Array(L), sy: new Float64Array(L) }; }
+  const qx = visBuf.qx, qy = visBuf.qy, sx = visBuf.sx, sy = visBuf.sy;
+  let n = 0;
+  for (let i = 0; i < n0; i++) {
+    const a = all[i].p1, b = all[i].p2;
+    if (Math.max(a.x, b.x) < px - radius || Math.min(a.x, b.x) > px + radius || Math.max(a.y, b.y) < py - radius || Math.min(a.y, b.y) > py + radius) continue;
+    if (distToSegment(origin, a, b) > radius) continue;
+    qx[n] = a.x - px; qy[n] = a.y - py; sx[n] = b.x - a.x; sy[n] = b.y - a.y; n++;
+  }
+  const EPS = 0.0001, angles = [];
+  const addPt = p => { const dx = p.x - px, dy = p.y - py; if (dx * dx + dy * dy > r2) return; const a = Math.atan2(dy, dx); angles.push(a - EPS, a, a + EPS); };
+  for (let i = 0; i < WALL_PTS.length; i++) addPt(WALL_PTS[i]);
+  for (let i = 0; i < closedSegs.length; i++) { addPt(closedSegs[i].p1); addPt(closedSegs[i].p2); }
+  for (let i = 0; i < 96; i++) angles.push(-Math.PI + (Math.PI * 2 * i) / 96);
+  const sorted = Float64Array.from(angles).sort();
+  const poly = new Array(sorted.length);
+  for (let k = 0; k < sorted.length; k++) {
+    const ang = sorted[k], dx = Math.cos(ang), dy = Math.sin(ang);
+    let nearest = radius;
+    for (let i = 0; i < n; i++) {
+      const den = dx * sy[i] - dy * sx[i];
+      if (den > -1e-9 && den < 1e-9) continue;
+      const t = (qx[i] * sy[i] - qy[i] * sx[i]) / den;
+      if (t < 0 || t >= nearest) continue;
+      const u = (qx[i] * dy - qy[i] * dx) / den;
+      if (u >= -1e-9 && u <= 1 + 1e-9) nearest = t;
+    }
+    poly[k] = { x: px + dx * nearest, y: py + dy * nearest };
+  }
+  visCache = { x: px, y: py, r: radius, doors: closedSegs, poly };
+  return poly;
+}
+function getVisibilityPolygonOld(px, py, radius) {
   const origin = { x: px, y: py };
   const nearby = allSegs().filter(seg => distToSegment(origin, seg.p1, seg.p2) <= radius);
   const EPS = 0.0001, angles = [];
@@ -1354,6 +1399,15 @@ function renderMinimap() {
 }
 
 // 시야 밖을 완전히 가리는 안개 (시야 다각형 안쪽만 구멍을 뚫음)
+// [렉 수정] 맵 이미지는 화면에 보이는 부분만 그림 (모바일에서 거대한 이미지를 매 프레임 그리던 것 방지)
+function drawMapView(c) {
+  const img = skeldMapImg, kx = img.naturalWidth / MAP_WIDTH, ky = img.naturalHeight / MAP_HEIGHT, pad = 8;
+  const x0 = Math.max(0, localPlayer.x - VIEW_W / 2 - pad), y0 = Math.max(0, localPlayer.y - VIEW_H / 2 - pad);
+  const x1 = Math.min(MAP_WIDTH, localPlayer.x + VIEW_W / 2 + pad), y1 = Math.min(MAP_HEIGHT, localPlayer.y + VIEW_H / 2 + pad);
+  if (x1 <= x0 || y1 <= y0) return;
+  c.imageSmoothingEnabled = false;
+  c.drawImage(img, x0 * kx, y0 * ky, (x1 - x0) * kx, (y1 - y0) * ky, x0, y0, x1 - x0, y1 - y0);
+}
 function drawFog(sc, radius, poly) {
   const cw = maskCanvas.width, ch = maskCanvas.height;
   mctx.save();
@@ -1486,7 +1540,7 @@ function gameLoop(ts) {
         const cands = Object.keys(DOOR_DEFS).filter(k => !(sabotageState.doors || []).includes(k)).map(doorRem);
         if (!sabotageState.type) cands.push(sabCdSec());
         const rem = cands.length ? Math.min(...cands) : 0;
-        if (rem > 0) { sabOv.style.display = 'flex'; sabOv.innerText = rem; } else sabOv.style.display = 'none';
+        if (rem > 0) { sabOv.style.display = 'flex'; if (sabOv._v !== rem) { sabOv._v = rem; sabOv.innerText = rem; } } else sabOv.style.display = 'none';
       }
 
       if (alive) {
@@ -1496,7 +1550,7 @@ function gameLoop(ts) {
         if (remainSec === 0 && target && !isVented) { killBtn.classList.add('active'); killOverlay.style.display = 'none'; }
         else {
           killBtn.classList.remove('active');
-          if (remainSec > 0) { killOverlay.style.display = 'flex'; killOverlay.innerText = remainSec; }
+          if (remainSec > 0) { killOverlay.style.display = 'flex'; if (killOverlay._v !== remainSec) { killOverlay._v = remainSec; killOverlay.innerText = remainSec; } }
           else killOverlay.style.display = 'none';
         }
         ventBtn.style.display = 'block'; // 임포스터는 벤트 버튼 항상 표시 (가까울 때만 활성)
@@ -1540,7 +1594,7 @@ function gameLoop(ts) {
     } else {
       if (skeldMapImg.complete && skeldMapImg.naturalWidth > 0) {
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(skeldMapImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
+        drawMapView(ctx);
       } else { ctx.fillStyle = '#1e2837'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
 
       REAL_SKELD_VENTS.forEach(v => drawVent(ctx, v));
@@ -1551,18 +1605,18 @@ function gameLoop(ts) {
       const me = currentRoom.players[myId];
       const meDead = !!me && !me.isAlive;
       const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 400 : 800);
-      const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, visionRadius);
+      const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, Math.min(visionRadius, 1000)); // 화면 밖은 계산 안 함
       fogPoly = visiblePolygon; fogRadius = visionRadius;
 
       bodies.forEach(b => {
-        if (role === 'IMPOSTOR' || meDead || (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) <= visionRadius && isPointInPolygon(b, visiblePolygon))) drawDeadBody(ctx, b.x, b.y, b.color);
+        if (meDead || (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) <= visionRadius && isPointInPolygon(b, visiblePolygon))) drawDeadBody(ctx, b.x, b.y, b.color);
       });
 
       Object.values(currentRoom.players).forEach(p => {
         if (p.id === myId) return;
         if (!!p.isAlive === meDead) return; // 유령은 유령끼리만, 산 사람은 산 사람끼리만
         const inDist = Math.hypot(p.x - localPlayer.x, p.y - localPlayer.y) <= visionRadius;
-        const isVisible = role === 'IMPOSTOR' || meDead || (inDist && isPointInPolygon(p, visiblePolygon));
+        const isVisible = meDead || (inDist && isPointInPolygon(p, visiblePolygon)); // 임포스터도 벽 너머는 안 보임
         if (isVisible) {
           drawTaskFx(ctx, p, animTick);
           drawCrewmate(ctx, p.x, p.y, p.color, p.name, false, p.dir || 1, p.isMoving, p.isAlive, p.inVent, p.ventAnim || 0, animTick);
