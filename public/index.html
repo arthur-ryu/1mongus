@@ -301,7 +301,7 @@ const skeldMapImg = new Image(); skeldMapImg.src = CDN_BASE + 'The_Skeld_map.png
 const waitShipImg = new Image(); waitShipImg.src = CDN_BASE + 'wait.png';
 
 // ───── 효과음 (CDN_BASE 폴더에 mp3 파일을 올려두면 됩니다) ─────
-const SFX_NAMES = ['emergency', 'kill', 'lose', 'report', 'sabotage', 'text', 'vent', 'walk', 'win', 'doorclose', 'dooropen'];
+const SFX_NAMES = ['among', 'emergency', 'kill', 'lose', 'report', 'sabotage', 'text', 'vent', 'walk', 'win', 'doorclose', 'dooropen'];
 const SFX = {};
 SFX_NAMES.forEach(n => { const a = new Audio(CDN_BASE + n + '.mp3'); a.preload = 'auto'; SFX[n] = a; });
 const SOUND_RANGE = 1000;        // kill / vent 소리가 들리는 거리 (월드 좌표)
@@ -348,7 +348,7 @@ const TABLE = { x: 3463, y: 767 }; // 긴급회의 테이블
 
 // 모든 기기에서 똑같이 보이는 화면 범위 (월드 좌표, 16:9). 숫자를 키우면 더 넓게 보임
 const VIEW_W = 1600, VIEW_H = 900;
-const FOG_COLOR = 'rgba(4, 7, 14, 1)'; // 시야 밖은 완전히 가림
+const FOG_COLOR = 'rgba(15, 23, 42, 0.65)'; // 시야 밖 어두운 정도 (원래 값). 1에 가까울수록 더 까맣게 가려짐
 const DOOR_EXT = 12;                    // 닫힌 문을 양끝 벽 쪽으로 살짝 늘려 틈을 막음 (REF 좌표)
 
 const RAW_VENTS = [
@@ -646,6 +646,7 @@ socket.on('game_started', ({ players, imposterCount }) => {
     sub.innerText = `임포스터를 찾아 추방하고 미션을 완료하세요.`;
   }
   intro.style.display = 'flex';
+  playSfx('among', 1); // 크루원/임포스터 공개 연출 소리
   setTimeout(() => { intro.style.display = 'none'; }, 3500);
 });
 
@@ -1545,6 +1546,7 @@ function gameLoop(ts) {
       REAL_SKELD_VENTS.forEach(v => drawVent(ctx, v));
       drawDoors(ctx);
       drawCamLights(ctx);
+      TaskSys.draw(ctx, animTick);
 
       const me = currentRoom.players[myId];
       const meDead = !!me && !me.isAlive;
@@ -1578,8 +1580,10 @@ function gameLoop(ts) {
     if (currentRoom.state === 'PLAYING') {
       const m0 = currentRoom.players[myId];
       if (!(m0 && !m0.isAlive) && fogPoly) drawFog(sc, fogRadius, fogPoly); // 유령은 안개 없음
-      // 미션/수리 위치 마커는 안개 위에 표시 (맵 뒤쪽은 안 보이고 마커만 보임)
-      ctx.save(); applyCam(ctx, sc); TaskSys.draw(ctx, animTick); ctx.restore();
+      ctx.save(); applyCam(ctx, sc);
+      // 열리는 벤트 뚜껑은 벽 뒤에서도 보임 (사람은 안개에 가려져 안 보임)
+      REAL_SKELD_VENTS.forEach(v => { if ((ventLids[v.id] || 0) > 0) drawVent(ctx, v); });
+      ctx.restore();
       drawSabArrows();
     }
   }
