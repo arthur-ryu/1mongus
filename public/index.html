@@ -1880,7 +1880,7 @@ function gameLoop(ts) {
 
       const me = currentRoom.players[myId];
       const meDead = !!me && !me.isAlive;
-      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 250 : 800);
+      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 100 : 800);
       const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, Math.min(visionRadius, 1000)); // 화면 밖은 계산 안 함
       fogPoly = visiblePolygon; fogRadius = visionRadius;
 
