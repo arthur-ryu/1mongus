@@ -775,9 +775,10 @@ socket.on('player_vented', ({ id, inVent, x, y, ventId }) => {
   if (ventId && (inVent !== was || changedVent)) {
     if (id !== myId) {
       if (changedVent && was && inVent) {
-        // 벤트 안에서 다른 벤트로 이동할 때는 캐릭터가 나타나지 않고 뚜껑만 움직입니다.
-        animateVentLid(ventId);
+        // 벤트 안에서 이동할 때는 캐릭터와 뚜껑 애니메이션을 재생하지 않습니다.
+        // 캐릭터는 계속 벤트 안에 숨겨진 상태로 유지합니다.
       } else {
+        // 실제 탑승/하차에서만 뚜껑과 캐릭터 애니메이션을 실행합니다.
         if (!ventLids[ventId]) animateVentLid(ventId, true);
         else ventLids[ventId].manualHold = true;
         p.ventAnim = inVent ? 25 : -20;
@@ -1216,9 +1217,8 @@ function showVentNav(curVent) {
 }
 function travelToVent(tv) {
   if (ventTravel || ventTransition) return;
-  const from = REAL_SKELD_VENTS.find(v => v.id === currentVentId);
-  if (from) animateVentLid(from.id);
-  currentVentId = tv.id; animateVentLid(tv.id); ventAnimTick = 0; hideVentNav();
+  // 벤트 안 이동은 캐릭터가 숨겨진 채 위치만 바뀝니다. 뚜껑 애니메이션은 탑승/하차 때만 재생합니다.
+  currentVentId = tv.id; ventAnimTick = 0; hideVentNav();
   ventTravel = { fx: localPlayer.x, fy: localPlayer.y, tx: tv.x, ty: tv.y, t0: performance.now(), dur: 350, vent: tv };
   playSfx('ventmove', 1); // 벤트 이동 소리 (이동하는 임포스터에게만 들림)
   socket.emit('toggle_vent', { inVent: true, x: tv.x, y: tv.y, ventId: tv.id });
