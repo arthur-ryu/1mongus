@@ -1220,7 +1220,7 @@ function travelToVent(tv) {
   // 벤트 안 이동은 캐릭터가 숨겨진 채 위치만 바뀝니다. 뚜껑 애니메이션은 탑승/하차 때만 재생합니다.
   currentVentId = tv.id; ventAnimTick = 0; hideVentNav();
   ventTravel = { fx: localPlayer.x, fy: localPlayer.y, tx: tv.x, ty: tv.y, t0: performance.now(), dur: 350, vent: tv };
-  // 벤트 안 이동은 효과음 없음
+  playSfx('ventmove', 1); // 벤트 이동 소리 (이동하는 임포스터에게만 들림)
   socket.emit('toggle_vent', { inVent: true, x: tv.x, y: tv.y, ventId: tv.id });
 }
 function hideVentNav() {
