@@ -281,7 +281,7 @@ if (typeof window !== 'undefined') window.TaskSys = (() => {
   // 미션 목록: 화면 크기에 맞춰 글자/너비가 자동으로 줄고 늘어나며, 제목줄을 눌러 접고 펼 수 있음
   function render() {
     if (!ui) {
-      ui = el('div', 'position:absolute;top:clamp(46px,9vh,64px);left:16px;width:clamp(150px,24vw,250px);z-index:55;pointer-events:none;font-size:clamp(10px,min(1.6vw,2.8vh),14px);color:#0f172a;');
+      ui = el('div', 'position:absolute;top:clamp(8px,2vh,18px);left:16px;width:clamp(150px,24vw,250px);z-index:55;pointer-events:none;font-size:clamp(10px,min(1.6vw,2.8vh),14px);color:#0f172a;');
       document.getElementById('in-game-ui').appendChild(ui);
     }
     if (sabotageState.type === 'comms') {
