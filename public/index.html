@@ -478,7 +478,7 @@ const DOOR_DEFS = {
   security:    { n: '보안실', ic: [785, 735], s: [[690,603,690,705]] },
   medbay:      { n: '의무실', ic: [960, 660], s: [[968,372,1042,372]] },
   electrical:  { n: '전기실', ic: [1000, 1005], s: [[942,1108,1030,1108]] },
-  storage:     { n: '창고', ic: [1380, 1250], s: [[1222,1095,1222,1196]] }
+  storage:     { n: '창고', ic: [1380, 1250], s: [[1222,1095,1222,1196],[1424,836,1500,836],[1555,968,1555,1078]] }
 };
 const SAB_ICONS = [
   { t: 'lights', e: '💡', x: 1150, y: 820, n: '전등 끄기' },
@@ -786,7 +786,7 @@ socket.on('player_vented', ({ id, inVent, x, y, ventId }) => {
         p.ventLidClosePending = true;
       }
     }
-    playSfxAt('vent', p.x, p.y, SOUND_RANGE);
+    if (!(changedVent && was && inVent)) playSfxAt('vent', p.x, p.y, SOUND_RANGE); // 벤트 안 이동은 소리 없음
   }
 });
 socket.on('player_visual', ({ id, key }) => {
@@ -1220,7 +1220,7 @@ function travelToVent(tv) {
   // 벤트 안 이동은 캐릭터가 숨겨진 채 위치만 바뀝니다. 뚜껑 애니메이션은 탑승/하차 때만 재생합니다.
   currentVentId = tv.id; ventAnimTick = 0; hideVentNav();
   ventTravel = { fx: localPlayer.x, fy: localPlayer.y, tx: tv.x, ty: tv.y, t0: performance.now(), dur: 350, vent: tv };
-  playSfx('ventmove', 1); // 벤트 이동 소리 (이동하는 임포스터에게만 들림)
+  // 벤트 안 이동은 효과음 없음
   socket.emit('toggle_vent', { inVent: true, x: tv.x, y: tv.y, ventId: tv.id });
 }
 function hideVentNav() {
