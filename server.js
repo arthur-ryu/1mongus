@@ -23,6 +23,7 @@ const INTRO_MS = 2500;     // 회의 시작 연출 시간 (클라이언트 index
 const EJECT_MS = 5000;     // 추방 결과(타이핑) 화면 시간
 const DOOR_ROOMS = ['cafeteria', 'upperEngine', 'lowerEngine', 'security', 'medbay', 'electrical', 'storage']; // 실제 Skeld 문 방
 const VIS_KEYS = ['scan', 'asteroids', 'shields', 'garbage'];
+const VENT_IDS = new Set(['v_cafeteria', 'v_hallway_admin', 'v_admin', 'v_medbay', 'v_electrical', 'v_security', 'v_weapons', 'v_nav_top', 'v_shields', 'v_nav_bottom', 'v_reactor_top', 'v_upper_engine', 'v_reactor_bottom', 'v_lower_engine']);
 const SPAWN = { x: 3480, y: 1330, r: 80 };
 
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -148,6 +149,9 @@ io.on('connection', (socket) => {
       p.role = imposters.has(id) ? 'IMPOSTOR' : 'CREWMATE';
       p.isAlive = true;
       p.inVent = false;
+      p.ventId = null;
+      p.ventBusyUntil = 0;
+      p.ventOpeningUntil = 0;
       p.visual = null;
       p.x = SPAWN.x + Math.cos(angle) * SPAWN.r;
       p.y = SPAWN.y + Math.sin(angle) * SPAWN.r;
@@ -168,18 +172,45 @@ io.on('connection', (socket) => {
     const room = rooms[socket.roomId];
     if (!room || !room.players[socket.id] || (room.state !== 'PLAYING' && room.state !== 'LOBBY')) return;
     const p = room.players[socket.id];
+    const now = Date.now();
+    if ((p.ventBusyUntil && now < p.ventBusyUntil) || (p.ventOpeningUntil && now < p.ventOpeningUntil)) return;
     p.x = pos.x; p.y = pos.y; p.dir = pos.dir; p.isMoving = pos.isMoving;
     socket.to(socket.roomId).emit('player_moved', { id: socket.id, x: pos.x, y: pos.y, dir: pos.dir, isMoving: pos.isMoving });
   });
 
+  // 벤트 뚜껑은 탑승/하차 전에 먼저 열어 모든 플레이어에게 보여줍니다.
+  socket.on('vent_lid', ({ ventId }) => {
+    const room = rooms[socket.roomId];
+    if (!room || room.state !== 'PLAYING' || !VENT_IDS.has(ventId)) return;
+    const p = room.players[socket.id];
+    if (!p || p.role !== 'IMPOSTOR' || !p.isAlive || (p.ventBusyUntil && Date.now() < p.ventBusyUntil)) return;
+    p.ventOpeningUntil = Date.now() + 260;
+    io.to(room.id).emit('vent_lid_animated', { id: socket.id, ventId });
+  });
+
   socket.on('toggle_vent', ({ inVent, x, y, ventId }) => {
     const room = rooms[socket.roomId];
-    if (!room || room.state !== 'PLAYING') return;
+    if (!room || room.state !== 'PLAYING' || !VENT_IDS.has(ventId)) return;
     const p = room.players[socket.id];
-    if (!p || p.role !== 'IMPOSTOR' || !p.isAlive) return;
-    p.inVent = inVent;
-    if (x && y) { p.x = x; p.y = y; }
-    io.to(socket.roomId).emit('player_vented', { id: socket.id, inVent: p.inVent, x: p.x, y: p.y, ventId });
+    if (!p || p.role !== 'IMPOSTOR' || !p.isAlive || (p.ventBusyUntil && Date.now() < p.ventBusyUntil)) return;
+    const entering = !!inVent;
+    const changedVent = entering && p.inVent && p.ventId !== ventId;
+    if (entering === !!p.inVent && !changedVent) return;
+    if (!entering && !p.inVent) return;
+    p.inVent = entering;
+    p.isMoving = false;
+    p.ventId = entering ? ventId : null;
+    // 정상 클라이언트는 애니메이션 종료 이벤트로 잠금을 풉니다. 1.5초 제한은 예외 상황용입니다.
+    p.ventBusyUntil = Date.now() + 1500;
+    if (Number.isFinite(x) && Number.isFinite(y)) { p.x = x; p.y = y; }
+    io.to(room.id).emit('player_vented', { id: socket.id, inVent: p.inVent, x: p.x, y: p.y, ventId });
+  });
+
+  socket.on('vent_transition_done', ({ ventId }) => {
+    const room = rooms[socket.roomId];
+    const p = room && room.players[socket.id];
+    if (!p || p.role !== 'IMPOSTOR') return;
+    if (p.ventId === ventId || !p.inVent) { p.ventBusyUntil = 0; p.ventOpeningUntil = 0; }
   });
 
   socket.on('kill_player', ({ targetId }) => {
@@ -384,7 +415,7 @@ io.on('connection', (socket) => {
     room.players[sock.id] = {
       id: sock.id, name: finalName, color,
       x: 1200 + (Math.random() * 80 - 40), y: 1100 + (Math.random() * 80 - 40),
-      dir: 1, isMoving: false, isAlive: true, inVent: false, role: 'CREWMATE', lastKillTime: 0, visual: null
+      dir: 1, isMoving: false, isAlive: true, inVent: false, ventId: null, ventBusyUntil: 0, ventOpeningUntil: 0, role: 'CREWMATE', lastKillTime: 0, visual: null
     };
     sock.emit('room_joined', { roomId, room: pub(room), myId: sock.id });
     io.to(roomId).emit('room_update', pub(room));
@@ -397,7 +428,7 @@ io.on('connection', (socket) => {
     room.bodies = [];
     room.meetingPhase = 'INTRO';
     if (room.meetingTimer) clearInterval(room.meetingTimer);
-    Object.values(room.players).forEach(p => { p.inVent = false; p.visual = null; });
+    Object.values(room.players).forEach(p => { p.inVent = false; p.ventId = null; p.ventBusyUntil = 0; p.ventOpeningUntil = 0; p.visual = null; });
     room.cams.clear(); io.to(room.id).emit('cctv_count', 0);
     if (room.sab && room.sab.hold) { room.sab.hold = {}; sendSab(room); }
 
