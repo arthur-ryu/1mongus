@@ -36,6 +36,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .hud-circle-btn:active { transform: scale(.92); }
 .hud-map-btn { background-image: url('https://cdn.jsdelivr.net/gh/arthur-ryu/1mongus-cdn@main/map.png'); background-size: contain; background-repeat: no-repeat; background-position: center; }
 .hud-exit-btn { width: 76px; border-radius: 16px; padding: 0 8px; background: #ef4444; color: #fff; border-color: #7f1d1d; font-size: 14px; font-weight: 700; }
+.hud-fullscreen-btn { width: 104px; border-radius: 16px; padding: 0 8px; background: #0284c7; color: #fff; border-color: #0c4a6e; font-size: 13px; font-weight: 700; }
 
 .action-btn-group { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; z-index: 60; align-items: flex-end; }
 .action-btn-row { display: flex; gap: 14px; justify-content: flex-end; }
@@ -203,6 +204,7 @@ canvas { display: block; width: 100%; height: 100%; }
 
 <div class="top-right-hud" id="top-right-hud">
   <div class="hud-circle-btn hud-map-btn" onclick="toggleMapModal()" title="지도"></div>
+  <button class="hud-circle-btn hud-fullscreen-btn" id="lobby-fullscreen-btn" onclick="toggleGameFullscreen()" title="전체화면">전체화면</button>
   <button class="hud-circle-btn hud-exit-btn" onclick="leaveToLobby()" title="방 나가기">나가기</button>
 </div>
 
@@ -339,9 +341,18 @@ let myId = null, myNickname = 'Crew', currentRoom = null, role = 'CREWMATE';
 let bodies = [], killCooldown = 25, lastKillStamp = 0;
 let isVented = false, currentVentId = null, ventAnimTick = 0, ventAnimDir = 1, ventLids = {};
 let ventTravel = null; // 벤트 사이 이동 애니메이션
-function animateVentLid(ventId) {
+let ventTransition = null; // 탑승/하차 연출 중에는 이동과 재탑승을 잠급니다.
+const VENT_LID_OPEN_MS = 220;
+const VENT_LID_CLOSE_MS = 220;
+function animateVentLid(ventId, holdOpen = false) {
   if (ventId == null) return;
-  ventLids[ventId] = { progress: 0, phase: 'opening', hold: 7 };
+  ventLids[ventId] = { progress: 0, phase: 'opening', hold: 8, manualHold: !!holdOpen };
+}
+function closeVentLid(ventId) {
+  const lid = ventLids[ventId];
+  if (!lid || typeof lid !== 'object') return;
+  lid.manualHold = false;
+  lid.phase = 'closing';
 }
 function ventLidProgress(ventId) {
   const lid = ventLids[ventId];
@@ -352,15 +363,22 @@ function updateVentLidAnimations() {
     const lid = ventLids[id];
     if (!lid || typeof lid !== 'object') { delete ventLids[id]; return; }
     if (lid.phase === 'opening') {
-      lid.progress = Math.min(1, lid.progress + 0.13);
+      lid.progress = Math.min(1, lid.progress + 0.15);
       if (lid.progress >= 1) lid.phase = 'holding';
     } else if (lid.phase === 'holding') {
-      if (--lid.hold <= 0) lid.phase = 'closing';
+      if (!lid.manualHold && --lid.hold <= 0) lid.phase = 'closing';
     } else {
-      lid.progress = Math.max(0, lid.progress - 0.11);
+      lid.progress = Math.max(0, lid.progress - 0.12);
       if (lid.progress <= 0) delete ventLids[id];
     }
   });
+}
+function finishVentTransition() {
+  if (!ventTransition) return;
+  const t = ventTransition;
+  closeVentLid(t.ventId);
+  t.phase = 'closing';
+  t.phaseStartedAt = performance.now();
 }
 let sabotageState = { type: null, doors: [], fixed: [], sw: [] };
 let doorReadyLocal = {}, closedSegs = [], adminOpen = false, camOpen = false, cctvCount = 0, sabIconRefs = [];
@@ -611,6 +629,13 @@ function requestGameFullscreen() {
     fullscreenPending = true;
   }
 }
+function toggleGameFullscreen() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    exitGameFullscreen();
+    return;
+  }
+  requestGameFullscreen();
+}
 function exitGameFullscreen() {
   fullscreenPending = false;
   try {
@@ -624,9 +649,13 @@ function exitGameFullscreen() {
 }
 document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement) fullscreenPending = false;
+  const b = document.getElementById('lobby-fullscreen-btn');
+  if (b) b.innerText = document.fullscreenElement ? '창모드' : '전체화면';
 });
 document.addEventListener('webkitfullscreenchange', () => {
   if (document.webkitFullscreenElement) fullscreenPending = false;
+  const b = document.getElementById('lobby-fullscreen-btn');
+  if (b) b.innerText = document.webkitFullscreenElement ? '창모드' : '전체화면';
 });
 document.addEventListener('pointerdown', () => {
   if (fullscreenPending && currentRoom && currentRoom.state !== 'LOBBY') requestGameFullscreen();
@@ -657,6 +686,8 @@ function leaveToLobby() {
   isVented = false;
   currentVentId = null;
   ventTravel = null;
+  ventTransition = null;
+  ventLids = {}; ventAnimTick = 0;
   sabotageState = { type: null, doors: [], fixed: [], sw: [] };
   adminOpen = false;
   camOpen = false;
@@ -727,6 +758,11 @@ socket.on('player_moved', ({ id, x, y, dir, isMoving }) => {
     if (p.x === undefined) { p.x = x; p.y = y; }
   }
 });
+socket.on('vent_lid_animated', ({ id, ventId }) => {
+  if (id === myId || ventId == null) return;
+  // 탑승/하차 이벤트보다 먼저 뚜껑을 열어 캐릭터 모션과 순서를 맞춥니다.
+  animateVentLid(ventId, true);
+});
 socket.on('player_vented', ({ id, inVent, x, y, ventId }) => {
   const p = currentRoom && currentRoom.players[id];
   if (!p) return;
@@ -737,10 +773,17 @@ socket.on('player_vented', ({ id, inVent, x, y, ventId }) => {
   if (x !== undefined && y !== undefined) { p.x = p.tx = x; p.y = p.ty = y; }
   const changedVent = inVent && previousVentId != null && previousVentId !== ventId;
   if (ventId && (inVent !== was || changedVent)) {
-    // 다른 플레이어도 뚜껑이 부드럽게 열리고 다시 닫히는 애니메이션을 봅니다.
     if (id !== myId) {
-      animateVentLid(ventId);
-      p.ventAnim = inVent ? 25 : -20;
+      if (changedVent && was && inVent) {
+        // 벤트 안에서 다른 벤트로 이동할 때는 캐릭터가 나타나지 않고 뚜껑만 움직입니다.
+        animateVentLid(ventId);
+      } else {
+        if (!ventLids[ventId]) animateVentLid(ventId, true);
+        else ventLids[ventId].manualHold = true;
+        p.ventAnim = inVent ? 25 : -20;
+        p.ventAnimVentId = ventId;
+        p.ventLidClosePending = true;
+      }
     }
     playSfxAt('vent', p.x, p.y, SOUND_RANGE);
   }
@@ -752,7 +795,7 @@ socket.on('player_visual', ({ id, key }) => {
 socket.on('game_started', ({ players, imposterCount }) => {
   currentRoom.players = players;
   currentRoom.state = 'PLAYING';
-  bodies = []; isVented = false; currentVentId = null;
+  bodies = []; isVented = false; currentVentId = null; ventTransition = null; ventTravel = null; ventLids = {}; ventAnimTick = 0;
   sabotageState = { type: null, doors: [], fixed: [], sw: [] }; closedSegs = [];
   document.getElementById('sab-banner').style.display = 'none';
   hideVentNav();
@@ -821,7 +864,7 @@ socket.on('player_killed', ({ victimId, killerId, body }) => {
   bodies.push(body);
   if (currentRoom && currentRoom.players[victimId]) { currentRoom.players[victimId].isAlive = false; currentRoom.players[victimId].visual = null; }
   playSfxAt('kill', body.x, body.y, SOUND_RANGE); // 가까울수록 크게
-  if (victimId === myId) { TaskSys.close(); closeAdminMap(); closeCams(); }
+  if (victimId === myId) { TaskSys.close(); closeAdminMap(); closeCams(); ventTransition = null; ventTravel = null; isVented = false; currentVentId = null; hideVentNav(); }
 });
 
 // 회의 시작 연출 (2.5초) — 시체 신고면 "시체 발견!" + 발견된 시체 + 발견한 사람
@@ -829,7 +872,7 @@ socket.on('meeting_intro', ({ callerName, callerColor, type, bodyColor }) => {
   TaskSys.close(); closeAdminMap(); closeCams();
   document.getElementById('sab-flash').style.display = 'none';
   currentRoom.state = 'MEETING';
-  bodies = []; isVented = false; currentVentId = null;
+  bodies = []; isVented = false; currentVentId = null; ventTransition = null; ventTravel = null; ventLids = {}; ventAnimTick = 0;
   hideVentNav(); resetKeys(); closeSabotageModal();
   setWalkSound(false); syncSabLoop();
   document.getElementById('map-modal').style.display = 'none';
@@ -856,7 +899,7 @@ socket.on('meeting_started', ({ players, phase, timeLeft }) => {
   TaskSys.close();
   currentRoom.players = players;
   currentRoom.state = 'MEETING';
-  bodies = []; isVented = false; currentVentId = null;
+  bodies = []; isVented = false; currentVentId = null; ventTransition = null; ventTravel = null; ventLids = {}; ventAnimTick = 0;
   hideVentNav(); resetKeys();
 
   const modal = document.getElementById('meeting-modal');
@@ -1092,22 +1135,65 @@ function triggerSabotage() {
 }
 
 function triggerVent() {
-  if (role !== 'IMPOSTOR' || !currentRoom.players[myId].isAlive) return;
-  if (ventTravel) return;
+  const me = currentRoom && currentRoom.players[myId];
+  if (!me || role !== 'IMPOSTOR' || !me.isAlive || currentRoom.state !== 'PLAYING') return;
+  if (ventTravel || ventTransition) return;
+  const now = performance.now();
   if (!isVented) {
     const nearVent = getNearestVent();
     if (!nearVent) return;
-    isVented = true; currentVentId = nearVent.id; animateVentLid(nearVent.id); ventAnimTick = 25; ventAnimDir = 1;
+    ventTransition = { type: 'enter', ventId: nearVent.id, vent: nearVent, phase: 'opening', phaseStartedAt: now };
+    // 우선 뚜껑만 열고, 뚜껑이 열린 뒤 캐릭터가 작아져 들어갑니다.
+    animateVentLid(nearVent.id, true);
+    socket.emit('vent_lid', { ventId: nearVent.id });
     localPlayer.x = nearVent.x; localPlayer.y = nearVent.y;
-    socket.emit('toggle_vent', { inVent: true, x: nearVent.x, y: nearVent.y, ventId: nearVent.id });
-    showVentNav(nearVent);
+    ventAnimTick = 0; ventAnimDir = 1;
+    hideVentNav();
   } else {
     const exitId = currentVentId;
-    isVented = false; animateVentLid(exitId); ventAnimTick = 20; ventAnimDir = -1;
+    if (exitId == null) return;
     const spot = snapToValid(localPlayer.x, localPlayer.y);
-    localPlayer.x = spot.x; localPlayer.y = spot.y;
-    socket.emit('toggle_vent', { inVent: false, x: localPlayer.x, y: localPlayer.y, ventId: exitId });
-    hideVentNav(); currentVentId = null;
+    ventTransition = { type: 'exit', ventId: exitId, phase: 'opening', phaseStartedAt: now, exitSpot: spot };
+    // 뚜껑이 먼저 열린 후 캐릭터가 올라오고 마지막에 뚜껑이 닫힙니다.
+    animateVentLid(exitId, true);
+    socket.emit('vent_lid', { ventId: exitId });
+    ventAnimTick = 0; ventAnimDir = -1;
+    hideVentNav();
+  }
+}
+function beginVentCharacterPhase() {
+  if (!ventTransition || ventTransition.phase !== 'opening') return;
+  const t = ventTransition;
+  t.phase = 'character';
+  t.phaseStartedAt = performance.now();
+  if (t.type === 'enter') {
+    isVented = true; currentVentId = t.ventId;
+    ventAnimTick = 25; ventAnimDir = 1;
+    socket.emit('toggle_vent', { inVent: true, x: localPlayer.x, y: localPlayer.y, ventId: t.ventId });
+  } else {
+    localPlayer.x = t.exitSpot.x; localPlayer.y = t.exitSpot.y;
+    isVented = false;
+    ventAnimTick = 20; ventAnimDir = -1;
+    socket.emit('toggle_vent', { inVent: false, x: localPlayer.x, y: localPlayer.y, ventId: t.ventId });
+  }
+}
+function updateLocalVentTransition(now) {
+  if (!ventTransition) return;
+  const t = ventTransition;
+  if (t.phase === 'opening' && now - t.phaseStartedAt >= VENT_LID_OPEN_MS) {
+    beginVentCharacterPhase();
+    return;
+  }
+  if (t.phase === 'character' && ventAnimTick <= 0) {
+    finishVentTransition();
+    return;
+  }
+  if (t.phase === 'closing' && now - t.phaseStartedAt >= VENT_LID_CLOSE_MS) {
+    const kind = t.type, vent = t.vent;
+    ventTransition = null;
+    if (kind === 'enter') showVentNav(vent);
+    else currentVentId = null;
+    socket.emit('vent_transition_done', { ventId: t.ventId });
   }
 }
 function showVentNav(curVent) {
@@ -1129,12 +1215,13 @@ function showVentNav(curVent) {
   });
 }
 function travelToVent(tv) {
-  if (ventTravel) return;
+  if (ventTravel || ventTransition) return;
+  const from = REAL_SKELD_VENTS.find(v => v.id === currentVentId);
+  if (from) animateVentLid(from.id);
   currentVentId = tv.id; animateVentLid(tv.id); ventAnimTick = 0; hideVentNav();
   ventTravel = { fx: localPlayer.x, fy: localPlayer.y, tx: tv.x, ty: tv.y, t0: performance.now(), dur: 350, vent: tv };
   playSfx('ventmove', 1); // 벤트 이동 소리 (이동하는 임포스터에게만 들림)
   socket.emit('toggle_vent', { inVent: true, x: tv.x, y: tv.y, ventId: tv.id });
-  // (이동이 끝나면 gameLoop 에서 화살표를 다시 표시)
 }
 function hideVentNav() {
   const nav = document.getElementById('vent-nav-ui');
@@ -1319,7 +1406,9 @@ function updateRoomUI() {
   // 대기실에서는 나가기만, 게임 중에는 지도와 나가기 버튼을 표시합니다.
   document.getElementById('top-right-hud').style.display = 'flex';
   document.querySelector('#top-right-hud .hud-map-btn').style.display = inLobby ? 'none' : 'flex';
+  document.getElementById('lobby-fullscreen-btn').style.display = inLobby ? 'flex' : 'none';
   document.querySelector('#top-right-hud .hud-exit-btn').style.display = 'flex';
+  document.getElementById('lobby-fullscreen-btn').innerText = (document.fullscreenElement || document.webkitFullscreenElement) ? '창모드' : '전체화면';
 }
 
 // ───── 충돌 ─────
@@ -1370,16 +1459,21 @@ function drawVent(context, v) {
   context.translate(v.x, v.y);
   const rawOpen = Math.max(0, Math.min(1, ventLidProgress(v.id)));
   const openAmount = rawOpen * rawOpen * (3 - 2 * rawOpen);
+  // 바닥 프레임과 어두운 구멍
   context.fillStyle = '#06080e'; context.strokeStyle = '#1b2631'; context.lineWidth = 4;
   context.beginPath(); context.roundRect(-36, -24, 72, 48, 6); context.fill(); context.stroke();
+  context.fillStyle = '#111827'; context.fillRect(-28, -17, 56, 34);
+  // 뒤쪽 힌지를 중심으로 노트북 화면처럼 위로 젖혀집니다.
+  // 닫힌 상태에서는 덮개가 구멍을 덮고, 열릴수록 위로 올라가며 원근감 있게 얇아집니다.
   context.save();
-  // 뚜껑이 조금씩 위로 들리며 기울고, 잠깐 열린 뒤 같은 경로로 닫힙니다.
-  context.translate(0, -25 * openAmount);
-  context.rotate(-0.48 * openAmount);
+  context.translate(0, -24 - 22 * openAmount);
+  context.rotate(-0.28 * openAmount);
+  context.scale(1, 1 - 0.50 * openAmount);
   context.fillStyle = '#566573'; context.strokeStyle = '#17202a'; context.lineWidth = 5;
-  context.beginPath(); context.roundRect(-36, -24, 72, 48, 6); context.fill(); context.stroke();
+  context.beginPath(); context.roundRect(-36, 0, 72, 48, 6); context.fill(); context.stroke();
   context.fillStyle = '#85929e'; context.strokeStyle = '#111'; context.lineWidth = 2;
-  for (let vy = -11; vy <= 11; vy += 7.5) { context.fillRect(-26, vy, 52, 3.5); context.strokeRect(-26, vy, 52, 3.5); }
+  for (let vy = 8; vy <= 32; vy += 8) { context.fillRect(-26, vy, 52, 3.5); context.strokeRect(-26, vy, 52, 3.5); }
+  context.fillStyle = '#aab7c4'; context.fillRect(-31, 43, 62, 3);
   context.restore();
   context.restore();
 }
@@ -1441,12 +1535,14 @@ function drawCrewmate(context, x, y, color, name, isMe, dir, isMoving, isAlive, 
   context.beginPath(); context.ellipse(6, -14 + bounce, 6, 2.5, -0.2, 0, Math.PI * 2); context.fill();
   context.restore();
 
+  const labelScale = animState > 0 ? Math.max(0.05, animState / 25) : (animState < 0 ? Math.max(0.05, 1 + animState / 25) : 1);
   context.save();
-  context.font = '15px "Fredoka One", sans-serif';
+  context.globalAlpha *= labelScale;
+  context.font = `${15 * labelScale}px "Fredoka One", sans-serif`;
   context.textAlign = 'center';
   context.fillStyle = isMe ? (role === 'IMPOSTOR' ? '#ef4444' : '#0284c7') : '#0f172a';
-  context.strokeStyle = '#ffffff'; context.lineWidth = 4;
-  context.strokeText(name, x, y - 44); context.fillText(name, x, y - 44);
+  context.strokeStyle = '#ffffff'; context.lineWidth = 4 * labelScale;
+  context.strokeText(name, x, y - 44 * labelScale); context.fillText(name, x, y - 44 * labelScale);
   context.restore();
 }
 
@@ -1640,15 +1736,25 @@ function gameLoop(ts) {
     const k = Math.min(1, (performance.now() - ventTravel.t0) / ventTravel.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
     localPlayer.x = ventTravel.fx + (ventTravel.tx - ventTravel.fx) * e;
     localPlayer.y = ventTravel.fy + (ventTravel.ty - ventTravel.fy) * e;
-    if (k >= 1) { const v = ventTravel.vent; ventTravel = null; showVentNav(v); }
+    if (k >= 1) { const v = ventTravel.vent; ventTravel = null; socket.emit('vent_transition_done', { ventId: v.id }); showVentNav(v); }
   }
   lastTs = ts;
   animTick++;
   if (isVented) lastKillStamp += dms; // 벤트 안에서는 킬 쿨다운 정지
   updateVentLidAnimations();
-  if (currentRoom) Object.values(currentRoom.players).forEach(p => { if (p.ventAnim > 0) p.ventAnim--; else if (p.ventAnim < 0) p.ventAnim++; });
+  const nowPerf = performance.now();
+  if (currentRoom) Object.values(currentRoom.players).forEach(p => {
+    const oldAnim = p.ventAnim || 0;
+    if (p.ventAnim > 0) p.ventAnim--;
+    else if (p.ventAnim < 0) p.ventAnim++;
+    if (oldAnim !== 0 && p.ventAnim === 0 && p.ventLidClosePending) {
+      closeVentLid(p.ventAnimVentId);
+      p.ventLidClosePending = false;
+    }
+  });
+  updateLocalVentTransition(nowPerf);
   if (animTick % 15 === 0) updateSabIcons();
-  if (ventAnimTick > 0) ventAnimTick--;
+  if (ventAnimTick > 0 && (!ventTransition || ventTransition.phase === 'character')) ventAnimTick--;
 
   let vx = 0, vy = 0;
   if (keys.w || keys.ArrowUp) vy -= 1;
@@ -1659,7 +1765,7 @@ function gameLoop(ts) {
 
   const len = Math.hypot(vx, vy);
   let moving = false;
-  if (len > 0.05 && currentRoom && (currentRoom.state === 'PLAYING' || currentRoom.state === 'LOBBY') && !isVented && !TaskSys.isOpen() && !adminOpen && !camOpen) {
+  if (len > 0.05 && currentRoom && (currentRoom.state === 'PLAYING' || currentRoom.state === 'LOBBY') && !isVented && !ventTransition && !ventTravel && !TaskSys.isOpen() && !adminOpen && !camOpen) {
     const ox = localPlayer.x, oy = localPlayer.y;
     const step = 6.4 * dt * Math.min(len, 1);
     const nextX = ox + (vx / len) * step, nextY = oy + (vy / len) * step;
@@ -1797,7 +1903,8 @@ function gameLoop(ts) {
     const me = currentRoom.players[myId];
     if (me) {
       if (currentRoom.state !== 'LOBBY') drawTaskFx(ctx, me, animTick);
-      drawCrewmate(ctx, localPlayer.x, localPlayer.y, me.color, me.name, true, localPlayer.dir, localPlayer.isMoving, me.isAlive, isVented, ventAnimTick * ventAnimDir, animTick);
+      const hideDuringExitOpening = ventTransition && ventTransition.type === 'exit' && ventTransition.phase === 'opening';
+      if (!hideDuringExitOpening) drawCrewmate(ctx, localPlayer.x, localPlayer.y, me.color, me.name, true, localPlayer.dir, me.isAlive && localPlayer.isMoving, me.isAlive, isVented, ventAnimTick * ventAnimDir, animTick);
     }
     ctx.restore();
 
