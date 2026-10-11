@@ -1911,10 +1911,8 @@ function gameLoop(ts) {
     if (currentRoom.state === 'PLAYING') {
       const m0 = currentRoom.players[myId];
       if (!(m0 && !m0.isAlive) && fogPoly) drawFog(sc, fogRadius, fogPoly); // 유령은 안개 없음
-      ctx.save(); applyCam(ctx, sc);
-      // 열리는 벤트 뚜껑은 벽 뒤에서도 보임 (사람은 안개에 가려져 안 보임)
-      REAL_SKELD_VENTS.forEach(v => { if (ventLidProgress(v.id) > 0) drawVent(ctx, v); });
-      ctx.restore();
+      // 벤트는 플레이어보다 먼저 그립니다. 프레임 마지막에 벤트 전체를 다시 그리면
+      // 덮개/프레임이 캐릭터 위에 겹쳐 캐릭터가 가려지므로 상단 재렌더링은 하지 않습니다.
       drawSabArrows();
     }
   }
