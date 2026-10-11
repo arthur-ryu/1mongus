@@ -339,6 +339,29 @@ let myId = null, myNickname = 'Crew', currentRoom = null, role = 'CREWMATE';
 let bodies = [], killCooldown = 25, lastKillStamp = 0;
 let isVented = false, currentVentId = null, ventAnimTick = 0, ventAnimDir = 1, ventLids = {};
 let ventTravel = null; // 벤트 사이 이동 애니메이션
+function animateVentLid(ventId) {
+  if (ventId == null) return;
+  ventLids[ventId] = { progress: 0, phase: 'opening', hold: 7 };
+}
+function ventLidProgress(ventId) {
+  const lid = ventLids[ventId];
+  return lid && typeof lid === 'object' ? lid.progress : 0;
+}
+function updateVentLidAnimations() {
+  Object.keys(ventLids).forEach(id => {
+    const lid = ventLids[id];
+    if (!lid || typeof lid !== 'object') { delete ventLids[id]; return; }
+    if (lid.phase === 'opening') {
+      lid.progress = Math.min(1, lid.progress + 0.13);
+      if (lid.progress >= 1) lid.phase = 'holding';
+    } else if (lid.phase === 'holding') {
+      if (--lid.hold <= 0) lid.phase = 'closing';
+    } else {
+      lid.progress = Math.max(0, lid.progress - 0.11);
+      if (lid.progress <= 0) delete ventLids[id];
+    }
+  });
+}
 let sabotageState = { type: null, doors: [], fixed: [], sw: [] };
 let doorReadyLocal = {}, closedSegs = [], adminOpen = false, camOpen = false, cctvCount = 0, sabIconRefs = [];
 let lastChatTime = 0;
@@ -562,15 +585,62 @@ function handleCreateRoom() {
   socket.emit('create_room', { roomName: name, maxPlayers: max, playerName: myNickname });
 }
 function joinRoom(id) { socket.emit('join_room', { roomId: id, playerName: myNickname }); }
-function handleStartGame() { socket.emit('start_game'); }
+function handleStartGame() {
+  // START 버튼 클릭은 브라우저가 전체화면을 허용하는 사용자 동작이므로 먼저 요청합니다.
+  requestGameFullscreen();
+  socket.emit('start_game');
+}
+
+let fullscreenPending = false;
+function requestGameFullscreen() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    fullscreenPending = false;
+    return;
+  }
+  const root = document.documentElement;
+  const request = root.requestFullscreen || root.webkitRequestFullscreen;
+  if (!request) return;
+  try {
+    const result = request.call(root);
+    // 전체화면은 사용자 동작이 필요하므로, 거부되면 다음 화면 입력 때 다시 시도합니다.
+    fullscreenPending = true;
+    if (result && typeof result.then === 'function') {
+      result.then(() => { fullscreenPending = false; }).catch(() => { fullscreenPending = true; });
+    }
+  } catch (_) {
+    fullscreenPending = true;
+  }
+}
+function exitGameFullscreen() {
+  fullscreenPending = false;
+  try {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      const result = document.exitFullscreen();
+      if (result && typeof result.catch === 'function') result.catch(() => {});
+    } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
+  } catch (_) {}
+}
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement) fullscreenPending = false;
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if (document.webkitFullscreenElement) fullscreenPending = false;
+});
+document.addEventListener('pointerdown', () => {
+  if (fullscreenPending && currentRoom && currentRoom.state !== 'LOBBY') requestGameFullscreen();
+}, true);
 function leaveToLobby() {
   if (!currentRoom) {
+    exitGameFullscreen();
     document.getElementById('in-game-ui').style.display = 'none';
     document.getElementById('top-right-hud').style.display = 'none';
     switchScreen('screen-rooms');
     return;
   }
 
+  exitGameFullscreen();
   // 서버에서 방 멤버를 제거하기 전에 열려 있는 인터페이스를 정리합니다.
   TaskSys.close();
   closeAdminMap();
@@ -661,12 +731,18 @@ socket.on('player_vented', ({ id, inVent, x, y, ventId }) => {
   const p = currentRoom && currentRoom.players[id];
   if (!p) return;
   const was = !!p.inVent;
+  const previousVentId = p.ventId;
   p.inVent = inVent;
-  if (x && y) { p.x = p.tx = x; p.y = p.ty = y; }
-  if (ventId && inVent !== was) {            // 벤트 뚜껑 + 캐릭터 들어가고 나오는 모션 (다른 사람 화면에도)
-    ventLids[ventId] = inVent ? 25 : 20;
-    if (id !== myId) p.ventAnim = inVent ? 25 : -20;
-    playSfxAt('vent', p.x, p.y, SOUND_RANGE); // 들어갈 때/나올 때 모두 거리 비례 소리
+  p.ventId = inVent ? ventId : null;
+  if (x !== undefined && y !== undefined) { p.x = p.tx = x; p.y = p.ty = y; }
+  const changedVent = inVent && previousVentId != null && previousVentId !== ventId;
+  if (ventId && (inVent !== was || changedVent)) {
+    // 다른 플레이어도 뚜껑이 부드럽게 열리고 다시 닫히는 애니메이션을 봅니다.
+    if (id !== myId) {
+      animateVentLid(ventId);
+      p.ventAnim = inVent ? 25 : -20;
+    }
+    playSfxAt('vent', p.x, p.y, SOUND_RANGE);
   }
 });
 socket.on('player_visual', ({ id, key }) => {
@@ -690,7 +766,8 @@ socket.on('game_started', ({ players, imposterCount }) => {
   lastKillStamp = Date.now();
   document.getElementById('meeting-chat-log').innerHTML = '';
   document.getElementById('start-btn-in-room').style.display = 'none';
-  document.getElementById('top-right-hud').style.display = 'flex';
+  updateRoomUI();
+  requestGameFullscreen();
 
   const intro = document.getElementById('role-reveal-screen');
   const title = document.getElementById('role-title');
@@ -876,6 +953,7 @@ socket.on('meeting_ejection', ({ ejectedPlayer, isTie, reason, impLeft }) => {
 socket.on('resume_game', ({ players }) => {
   currentRoom.players = players;
   currentRoom.state = 'PLAYING';
+  updateRoomUI();
   const s = snapToValid(players[myId].x, players[myId].y);
   localPlayer.x = s.x; localPlayer.y = s.y;
   socket.emit('player_move', { x: s.x, y: s.y, dir: localPlayer.dir, isMoving: false });
@@ -1019,13 +1097,13 @@ function triggerVent() {
   if (!isVented) {
     const nearVent = getNearestVent();
     if (!nearVent) return;
-    isVented = true; currentVentId = nearVent.id; ventLids[nearVent.id] = 25; ventAnimTick = 25; ventAnimDir = 1;
+    isVented = true; currentVentId = nearVent.id; animateVentLid(nearVent.id); ventAnimTick = 25; ventAnimDir = 1;
     localPlayer.x = nearVent.x; localPlayer.y = nearVent.y;
     socket.emit('toggle_vent', { inVent: true, x: nearVent.x, y: nearVent.y, ventId: nearVent.id });
     showVentNav(nearVent);
   } else {
     const exitId = currentVentId;
-    isVented = false; ventLids[exitId] = 20; ventAnimTick = 20; ventAnimDir = -1;
+    isVented = false; animateVentLid(exitId); ventAnimTick = 20; ventAnimDir = -1;
     const spot = snapToValid(localPlayer.x, localPlayer.y);
     localPlayer.x = spot.x; localPlayer.y = spot.y;
     socket.emit('toggle_vent', { inVent: false, x: localPlayer.x, y: localPlayer.y, ventId: exitId });
@@ -1052,7 +1130,7 @@ function showVentNav(curVent) {
 }
 function travelToVent(tv) {
   if (ventTravel) return;
-  currentVentId = tv.id; ventAnimTick = 0; hideVentNav();
+  currentVentId = tv.id; animateVentLid(tv.id); ventAnimTick = 0; hideVentNav();
   ventTravel = { fx: localPlayer.x, fy: localPlayer.y, tx: tv.x, ty: tv.y, t0: performance.now(), dur: 350, vent: tv };
   playSfx('ventmove', 1); // 벤트 이동 소리 (이동하는 임포스터에게만 들림)
   socket.emit('toggle_vent', { inVent: true, x: tv.x, y: tv.y, ventId: tv.id });
@@ -1231,9 +1309,17 @@ function getNearestVent() {
 }
 function updateRoomUI() {
   if (!currentRoom) return;
+  const inLobby = currentRoom.state === 'LOBBY';
   const count = Object.keys(currentRoom.players).length;
-  document.getElementById('room-info-pill').innerText = `${currentRoom.name} | ${count}/${currentRoom.maxPlayers}`;
-  document.getElementById('start-btn-in-room').style.display = (currentRoom.hostId === myId && currentRoom.state === 'LOBBY') ? 'block' : 'none';
+  const roomInfo = document.getElementById('room-info-pill');
+  roomInfo.innerText = `${currentRoom.name} | ${count}/${currentRoom.maxPlayers}`;
+  // 방 이름/인원수는 대기실에서만 표시합니다.
+  roomInfo.style.display = inLobby ? 'block' : 'none';
+  document.getElementById('start-btn-in-room').style.display = (currentRoom.hostId === myId && inLobby) ? 'block' : 'none';
+  // 대기실에서는 나가기만, 게임 중에는 지도와 나가기 버튼을 표시합니다.
+  document.getElementById('top-right-hud').style.display = 'flex';
+  document.querySelector('#top-right-hud .hud-map-btn').style.display = inLobby ? 'none' : 'flex';
+  document.querySelector('#top-right-hud .hud-exit-btn').style.display = 'flex';
 }
 
 // ───── 충돌 ─────
@@ -1282,12 +1368,14 @@ function hasLineOfSight(x1, y1, x2, y2) {
 function drawVent(context, v) {
   context.save();
   context.translate(v.x, v.y);
-  const isOpen = (ventLids[v.id] || 0) > 0;
-  const lidOffset = isOpen ? -20 : 0, lidAngle = isOpen ? -0.4 : 0;
+  const rawOpen = Math.max(0, Math.min(1, ventLidProgress(v.id)));
+  const openAmount = rawOpen * rawOpen * (3 - 2 * rawOpen);
   context.fillStyle = '#06080e'; context.strokeStyle = '#1b2631'; context.lineWidth = 4;
   context.beginPath(); context.roundRect(-36, -24, 72, 48, 6); context.fill(); context.stroke();
   context.save();
-  context.translate(0, lidOffset); context.rotate(lidAngle);
+  // 뚜껑이 조금씩 위로 들리며 기울고, 잠깐 열린 뒤 같은 경로로 닫힙니다.
+  context.translate(0, -25 * openAmount);
+  context.rotate(-0.48 * openAmount);
   context.fillStyle = '#566573'; context.strokeStyle = '#17202a'; context.lineWidth = 5;
   context.beginPath(); context.roundRect(-36, -24, 72, 48, 6); context.fill(); context.stroke();
   context.fillStyle = '#85929e'; context.strokeStyle = '#111'; context.lineWidth = 2;
@@ -1557,7 +1645,7 @@ function gameLoop(ts) {
   lastTs = ts;
   animTick++;
   if (isVented) lastKillStamp += dms; // 벤트 안에서는 킬 쿨다운 정지
-  for (const k in ventLids) if (ventLids[k] > 0) ventLids[k]--;
+  updateVentLidAnimations();
   if (currentRoom) Object.values(currentRoom.players).forEach(p => { if (p.ventAnim > 0) p.ventAnim--; else if (p.ventAnim < 0) p.ventAnim++; });
   if (animTick % 15 === 0) updateSabIcons();
   if (ventAnimTick > 0) ventAnimTick--;
@@ -1686,7 +1774,7 @@ function gameLoop(ts) {
 
       const me = currentRoom.players[myId];
       const meDead = !!me && !me.isAlive;
-      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 150 : 800);
+      const visionRadius = (role === 'IMPOSTOR' || meDead) ? 2000 : (sabotageState.type === 'lights' ? 250 : 800);
       const visiblePolygon = getVisibilityPolygon(localPlayer.x, localPlayer.y, Math.min(visionRadius, 1000)); // 화면 밖은 계산 안 함
       fogPoly = visiblePolygon; fogRadius = visionRadius;
 
@@ -1718,7 +1806,7 @@ function gameLoop(ts) {
       if (!(m0 && !m0.isAlive) && fogPoly) drawFog(sc, fogRadius, fogPoly); // 유령은 안개 없음
       ctx.save(); applyCam(ctx, sc);
       // 열리는 벤트 뚜껑은 벽 뒤에서도 보임 (사람은 안개에 가려져 안 보임)
-      REAL_SKELD_VENTS.forEach(v => { if ((ventLids[v.id] || 0) > 0) drawVent(ctx, v); });
+      REAL_SKELD_VENTS.forEach(v => { if (ventLidProgress(v.id) > 0) drawVent(ctx, v); });
       ctx.restore();
       drawSabArrows();
     }
