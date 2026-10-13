@@ -52,6 +52,14 @@ canvas { display: block; width: 100%; height: 100%; }
 
 #sab-banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: none; padding: 8px 22px; background: #ef4444; color: #fff; border: 3px solid #0f172a; border-radius: 20px; font-size: 18px; z-index: 62; pointer-events: none; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .6; } }
+#lobby-chat { position: absolute; left: 16px; bottom: 160px; width: clamp(220px, 34vw, 340px); display: none; flex-direction: column; gap: 6px; z-index: 61; pointer-events: auto; }
+#lobby-chat-log { max-height: clamp(70px, 22vh, 160px); overflow-y: auto; padding: 6px 8px; background: rgba(15,23,42,.55); border-radius: 12px; color: #fff; font-size: clamp(11px, 2.2vh, 14px); display: flex; flex-direction: column; gap: 3px; }
+#lobby-chat-log:empty { display: none; }
+.lobby-chat-row { word-break: break-all; }
+.lc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid #000; margin-right: 5px; }
+#lobby-chat-bar { display: flex; gap: 6px; }
+#lobby-chat-bar input { padding: 8px 10px; font-size: 14px; }
+#lobby-chat-bar button { width: auto; padding: 8px 14px; background: #0284c7; color: #fff; border: 2px solid #0f172a; font-size: 14px; cursor: pointer; }
 
 /* 누가 나갔는지 왼쪽에 뜨는 빨간 알림 */
 #leave-toasts { position: fixed; top: clamp(70px, 14vh, 92px); left: 16px; right: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; z-index: 2000; pointer-events: none; }
@@ -147,6 +155,7 @@ canvas { display: block; width: 100%; height: 100%; }
 
 <div id="role-reveal-screen">
   <div id="role-title">CREWMATE</div>
+  <canvas id="role-canvas" width="800" height="260" style="display:none;width:min(700px,90vw);height:auto;"></canvas>
   <div id="role-subtitle" style="font-size:22px; color:#aaa; margin-top:8px;">크루원들 사이에 임포스터가 숨어있습니다.</div>
 </div>
 
@@ -226,6 +235,10 @@ canvas { display: block; width: 100%; height: 100%; }
   </div>
 
   <div id="vent-nav-ui"></div>
+  <div id="lobby-chat">
+    <div id="lobby-chat-log"></div>
+    <div id="lobby-chat-bar"><input id="lobby-chat-input" type="text" maxlength="100" placeholder="대기실 채팅..." onkeydown="lobbyChatKey(event)"><button onclick="sendLobbyChat()">전송</button></div>
+  </div>
   <div id="joystick-zone"><div id="joystick-knob"></div></div>
 </div>
 
@@ -383,6 +396,7 @@ function finishVentTransition() {
 let sabotageState = { type: null, doors: [], fixed: [], sw: [] };
 let doorReadyLocal = {}, closedSegs = [], adminOpen = false, camOpen = false, cctvCount = 0, sabIconRefs = [];
 let lastChatTime = 0;
+let votedIds = new Set();
 
 const MAP_SCALE = 6.0;
 const MAP_WIDTH = 1024 * MAP_SCALE;
@@ -458,7 +472,7 @@ const RAW_OBST = [
   ['r',470,275,640,398],['r',470,925,640,1045],
   ['r',795,632,868,700],
   ['r',895,435,962,495],['r',895,510,962,562],['r',1060,435,1124,495],['r',1060,510,1124,562],['c',1085,658,48],
-  ['r',945,880,1000,938],['r',1032,870,1092,952],
+  ['r',945,878,1092,952],
   ['r',1325,960,1470,1095],['r',1290,845,1350,900],['r',1238,885,1292,950],['r',1280,1030,1325,1082],['r',1385,1105,1440,1172],['r',1435,940,1480,988],
   ['r',1672,792,1818,890],['r',1675,695,1830,760],
   ['c',2005,275,52],
@@ -473,8 +487,8 @@ const OB_M = 16;
 // (카페테리아 좌/우 문과 창고 문은 벽 모서리에 딱 맞게 고쳐서 틈이 안 생김)
 const DOOR_DEFS = {
   cafeteria:   { n: '카페테리아', ic: [1620, 540], s: [[1160,248,1160,352],[1424,628,1500,628],[1768,248,1768,346]] },
-  upperEngine: { n: '위쪽 엔진', ic: [560, 230], s: [[700,248,700,352]] },
-  lowerEngine: { n: '아래쪽 엔진', ic: [570, 890], s: [[700,940,700,1043]] },
+  upperEngine: { n: '위쪽 엔진', ic: [560, 230], s: [[700,248,700,352],[546,488,624,488]] },
+  lowerEngine: { n: '아래쪽 엔진', ic: [570, 890], s: [[700,940,700,1043],[546,866,624,866]] },
   security:    { n: '보안실', ic: [785, 735], s: [[690,603,690,705]] },
   medbay:      { n: '의무실', ic: [960, 660], s: [[968,372,1042,372]] },
   electrical:  { n: '전기실', ic: [1000, 1005], s: [[942,1108,1030,1108]] },
@@ -539,7 +553,16 @@ const WALL_PTS = (() => {
   WALL_SEGMENTS.forEach(s => [s.p1, s.p2].forEach(p => { const k = Math.round(p.x) * 100003 + Math.round(p.y); if (!m.has(k)) m.set(k, p); }));
   return [...m.values()];
 })();
-const allSegs = () => closedSegs.length ? WALL_SEGMENTS.concat(closedSegs) : WALL_SEGMENTS;
+// 시야만 막는 벽 (움직임은 RAW_OBST 가 막음): ['r', x0, y0, x1, y1] (REF 좌표) — 전기실 아래쪽 기계 줄
+const RAW_VIS_WALLS = [['r', 945, 878, 1092, 952]];
+const VIS_WALL_SEGS = [];
+RAW_VIS_WALLS.forEach(([_, x0, y0, x1, y1]) => {
+  const P = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => ({ x: x * REF_SX, y: y * REF_SY }));
+  for (let i = 0; i < 4; i++) VIS_WALL_SEGS.push({ p1: P[i], p2: P[(i + 1) % 4] });
+});
+VIS_WALL_SEGS.forEach(s => { WALL_PTS.push(s.p1, s.p2); });
+const STATIC_SEGS = WALL_SEGMENTS.concat(VIS_WALL_SEGS);
+const allSegs = () => closedSegs.length ? STATIC_SEGS.concat(closedSegs) : STATIC_SEGS;
 
 const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
 const joystick = { active: false, dx: 0, dy: 0, startX: 0, startY: 0 };
@@ -730,6 +753,7 @@ socket.on('name_taken', m => {
 
 socket.on('room_joined', ({ roomId, room, myId: assignedId }) => {
   myId = assignedId; currentRoom = room;
+  document.getElementById('lobby-chat-log').innerHTML = '';
   localPlayer.x = LOBBY_SPAWN.x; localPlayer.y = LOBBY_SPAWN.y;
   switchScreen(null);
   document.getElementById('in-game-ui').style.display = 'block';
@@ -818,9 +842,17 @@ socket.on('game_started', ({ players, imposterCount }) => {
   const sub = document.getElementById('role-subtitle');
   if (role === 'IMPOSTOR') {
     title.innerText = '임포스터'; title.style.color = '#ef4444';
+    { // 임포스터 캐릭터(나 + 동료)를 보여줌
+      const rc = document.getElementById('role-canvas'), rg = rc.getContext('2d');
+      rg.clearRect(0, 0, rc.width, rc.height);
+      const imps = Object.values(players).filter(q => q.role === 'IMPOSTOR'), n = Math.max(1, imps.length), gap = Math.min(200, 760 / n);
+      imps.forEach((q, i) => { rg.save(); rg.translate(400 + (i - (n - 1) / 2) * gap, 140); rg.scale(2.4, 2.4); drawCrewmate(rg, 0, 0, q.color, q.name, false, 1, false, true, false, 0, 0); rg.restore(); });
+      rc.style.display = 'block';
+    }
     sub.innerText = `크루원을 처치하고 우주선을 점령하세요. (임포스터 ${imposterCount}명)`;
   } else {
     title.innerText = '크루원'; title.style.color = '#0284c7';
+    document.getElementById('role-canvas').style.display = 'none';
     sub.innerText = `임포스터를 찾아 추방하고 미션을 완료하세요.`;
   }
   intro.style.display = 'flex';
@@ -862,6 +894,8 @@ socket.on('sabotage_updated', (s) => {
 socket.on('cctv_count', n => { cctvCount = n; });
 
 socket.on('player_killed', ({ victimId, killerId, body }) => {
+  body.t0 = performance.now(); body.sgn = Math.random() < 0.5 ? -1 : 1;
+  if (killerId === myId) lastKillStamp = Date.now(); // 킬 쿨다운 시작
   bodies.push(body);
   if (currentRoom && currentRoom.players[victimId]) { currentRoom.players[victimId].isAlive = false; currentRoom.players[victimId].visual = null; }
   playSfxAt('kill', body.x, body.y, SOUND_RANGE); // 가까울수록 크게
@@ -913,6 +947,7 @@ socket.on('meeting_started', ({ players, phase, timeLeft }) => {
 
   grid.innerHTML = '';
   document.getElementById('skip-voters-box').innerHTML = '';
+  votedIds = new Set();
   Object.values(players).forEach(p => {
     const card = document.createElement('div');
     card.id = `voter-card-${p.id}`;
@@ -951,7 +986,9 @@ socket.on('vote_status', ({ voterId, voterName }) => {
 
   const player = currentRoom && currentRoom.players && currentRoom.players[voterId];
   const name = voterName || (player && player.name) || '누군가';
-  appendMeetingSystemMessage(`${name}님이 투표했습니다.`);
+  votedIds.add(voterId);
+  const aliveN = Object.values((currentRoom && currentRoom.players) || {}).filter(q => q.isAlive).length;
+  appendMeetingSystemMessage(name + '님이 투표했습니다. (남은 인원: ' + Math.max(0, aliveN - votedIds.size) + '명)');
 });
 socket.on('meeting_reveal', ({ votes }) => {
   document.getElementById('meeting-timer-box').innerText = `투표 집계 중...`;
@@ -1065,6 +1102,28 @@ function sendMeetingChat() {
   socket.emit('meeting_chat', text);
   input.value = '';
 }
+// ───── 대기실 채팅 ─────
+let lastLobbyChat = 0;
+function sendLobbyChat() {
+  const input = document.getElementById('lobby-chat-input');
+  const text = input.value.trim();
+  if (!text || !currentRoom || currentRoom.state !== 'LOBBY') return;
+  const now = Date.now();
+  if (now - lastLobbyChat < 1000) return;
+  lastLobbyChat = now;
+  socket.emit('lobby_chat', text.slice(0, 100));
+  input.value = '';
+}
+function lobbyChatKey(e) { if (e.key === 'Enter') { if (e.isComposing || e.keyCode === 229) return; sendLobbyChat(); } }
+socket.on('new_lobby_chat', ({ senderId, senderName, senderColor, text }) => {
+  const log = document.getElementById('lobby-chat-log');
+  const row = document.createElement('div');
+  row.className = 'lobby-chat-row';
+  row.innerHTML = '<span class="lc-dot" style="background:' + senderColor + '"></span><b>' + escapeHtml(senderName) + '</b> ' + escapeHtml(text);
+  log.appendChild(row);
+  while (log.children.length > 40) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+});
 function appendMeetingSystemMessage(message) {
   const log = document.getElementById('meeting-chat-log');
   const row = document.createElement('div');
@@ -1119,6 +1178,7 @@ function nearAdmin() {
 
 function triggerKill() {
   if (role !== 'IMPOSTOR' || !currentRoom.players[myId].isAlive || isVented) return;
+  if (Date.now() - lastKillStamp < killCooldown * 1000) return; // 쿨다운 중/연타 방지
   const target = getNearestAliveCrewmate();
   if (target) socket.emit('kill_player', { targetId: target.id });
 }
@@ -1332,7 +1392,7 @@ function renderCams() {
     g.save(); g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     g.scale(sc, sc); g.translate(-(cx - vw / 2), -(cy - vh / 2));
     if (skeldMapImg.complete && skeldMapImg.naturalWidth > 0) g.drawImage(skeldMapImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
-    bodies.forEach(b => drawDeadBody(g, b.x, b.y, b.color));
+    bodies.forEach(b => drawBody(g, b));
     Object.values(currentRoom.players).forEach(p => {
       if (!p.isAlive || p.inVent) return;
       const pos = p.id === myId ? localPlayer : p;
@@ -1355,7 +1415,7 @@ function drawCamLights(c) {
 }
 // 원자로/산소: 수리 위치를 가리키는 빨강-노랑 화살표 (화면 비율에 맞춰 위치 계산)
 function drawSabArrows() {
-  if (!critSab()) return;
+  if (!sabotageState.type) return;
   const me = currentRoom.players[myId];
   if (!me || !me.isAlive) return;
   const cw = canvas.width, ch = canvas.height, sc = viewScale();
@@ -1402,6 +1462,7 @@ function updateRoomUI() {
   roomInfo.innerText = `${currentRoom.name} | ${count}/${currentRoom.maxPlayers}`;
   // 방 이름/인원수는 대기실에서만 표시합니다.
   roomInfo.style.display = inLobby ? 'block' : 'none';
+  document.getElementById('lobby-chat').style.display = inLobby ? 'flex' : 'none';
   document.getElementById('start-btn-in-room').style.display = (currentRoom.hostId === myId && inLobby) ? 'block' : 'none';
   // 대기실에서는 나가기만, 게임 중에는 지도와 나가기 버튼을 표시합니다.
   document.getElementById('top-right-hud').style.display = 'flex';
@@ -1546,6 +1607,33 @@ function drawCrewmate(context, x, y, color, name, isMe, dir, isMoving, isAlive, 
   context.restore();
 }
 
+// ───── 죽는 연출: 잘린 몸이 서서 비틀거리다 쓰러짐 ─────
+const DEATH_MS = 1100;
+function drawDyingBody(c, x, y, color, k, sgn) {
+  c.save(); c.translate(x, y); c.scale(1.15, 1.15);
+  let rot = 0, ox = 0, oy = 0, fade = 0;
+  if (k < 0.55) { const s = k / 0.55; rot = Math.sin(k * 42) * 0.22 * (1 - 0.3 * s); ox = Math.sin(k * 31) * 3; }   // 비틀비틀
+  else { const u = (k - 0.55) / 0.45, e = u * u; rot = sgn * e * Math.PI / 2; ox = -14 * sgn * e; oy = -20 * e; fade = Math.max(0, (u - 0.7) / 0.3); } // 쓰러짐
+  c.globalAlpha = 1 - fade;
+  c.translate(ox, oy); c.translate(0, 26); c.rotate(rot); c.translate(0, -26);
+  c.save();
+  c.beginPath(); c.rect(-40, -2, 80, 60); c.clip();   // 하반신만
+  c.fillStyle = color; c.strokeStyle = '#000'; c.lineWidth = 4;
+  c.beginPath(); c.roundRect(-24, -20, 12, 34, 6); c.fill(); c.stroke();
+  c.beginPath(); c.arc(0, -14, 18, Math.PI, 0, false); c.lineTo(18, 14); c.lineTo(6, 26); c.lineTo(2, 14); c.lineTo(-6, 26); c.lineTo(-18, 14); c.closePath(); c.fill(); c.stroke();
+  c.restore();
+  c.fillStyle = '#991b1b'; c.strokeStyle = '#000'; c.lineWidth = 3;          // 절단면 + 뼈
+  c.beginPath(); c.ellipse(0, -2, 18, 5, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+  c.fillStyle = '#fff';
+  c.beginPath(); c.roundRect(-3, -13, 6, 12, 2); c.fill(); c.stroke();
+  c.beginPath(); c.arc(-4, -14, 4.5, 0, 6.3); c.arc(4, -14, 4.5, 0, 6.3); c.fill(); c.stroke();
+  c.restore();
+  if (fade > 0) { c.save(); c.globalAlpha = fade; drawDeadBody(c, x, y, color); c.restore(); }
+}
+function drawBody(c, b) {
+  const k = b.t0 ? (performance.now() - b.t0) / DEATH_MS : 1;
+  if (k < 1) drawDyingBody(c, b.x, b.y, b.color, k, b.sgn || 1); else drawDeadBody(c, b.x, b.y, b.color);
+}
 function drawDeadBody(context, x, y, color) {
   context.save();
   context.translate(x, y); context.scale(1.15, 1.15);
@@ -1885,12 +1973,12 @@ function gameLoop(ts) {
       fogPoly = visiblePolygon; fogRadius = visionRadius;
 
       bodies.forEach(b => {
-        if (meDead || (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) <= visionRadius && isPointInPolygon(b, visiblePolygon))) drawDeadBody(ctx, b.x, b.y, b.color);
+        if (meDead || (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) <= visionRadius && isPointInPolygon(b, visiblePolygon))) drawBody(ctx, b);
       });
 
       Object.values(currentRoom.players).forEach(p => {
         if (p.id === myId) return;
-        if (!!p.isAlive === meDead) return; // 유령은 유령끼리만, 산 사람은 산 사람끼리만
+        if (!meDead && !p.isAlive) return; // 산 사람은 유령이 안 보이고, 유령은 모두 보임
         const inDist = Math.hypot(p.x - localPlayer.x, p.y - localPlayer.y) <= visionRadius;
         const isVisible = meDead || (inDist && isPointInPolygon(p, visiblePolygon)); // 임포스터도 벽 너머는 안 보임
         if (isVisible) {
