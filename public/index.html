@@ -311,7 +311,7 @@ canvas { display: block; width: 100%; height: 100%; }
         <button id="skip-vote-btn" class="skip-btn" onclick="castVote('SKIP')">투표 건너뛰기 (SKIP)</button>
         <div id="skip-voters-box" class="voted-by-container"></div>
       </div>
-      <div id="meeting-timer-box" class="meeting-timer-box">토론 시간: 10s</div>
+      <div id="meeting-timer-box" class="meeting-timer-box">토론 시간: 30s</div>
     </div>
     <div id="chat-modal">
       <div class="chat-header">
@@ -2015,7 +2015,7 @@ function gameLoop(ts) {
   let moving = killDashMoved;
   if (!killDashLocked && len > 0.05 && currentRoom && (currentRoom.state === 'PLAYING' || currentRoom.state === 'LOBBY') && !isVented && !ventTransition && !ventTravel && !TaskSys.isOpen() && !adminOpen && !camOpen) {
     const ox = localPlayer.x, oy = localPlayer.y;
-    const step = 6.4 * dt * Math.min(len, 1);
+    const step = 6.0 * dt * Math.min(len, 1);
     const nextX = ox + (vx / len) * step, nextY = oy + (vy / len) * step;
     if (isValidPosition(nextX, oy, ox, oy)) localPlayer.x = nextX;
     if (isValidPosition(localPlayer.x, nextY, localPlayer.x, oy)) localPlayer.y = nextY;
