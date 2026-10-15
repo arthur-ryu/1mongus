@@ -509,16 +509,16 @@ io.on('connection', (socket) => {
     setTimeout(() => {
       if (room.state !== 'MEETING' || room.meetingPhase !== 'INTRO') return;
       room.meetingPhase = 'DISCUSS';
-      room.phaseTime = 10;
-      io.to(room.id).emit('meeting_started', { players: room.players, phase: 'DISCUSS', timeLeft: 10 });
+      room.phaseTime = 30;
+      io.to(room.id).emit('meeting_started', { players: room.players, phase: 'DISCUSS', timeLeft: 30 });
 
       room.meetingTimer = setInterval(() => {
         room.phaseTime--;
         if (room.meetingPhase === 'DISCUSS') {
           if (room.phaseTime <= 0) {
             room.meetingPhase = 'VOTING';
-            room.phaseTime = 30;
-            io.to(room.id).emit('meeting_phase_change', { phase: 'VOTING', timeLeft: 30 });
+            room.phaseTime = 60;
+            io.to(room.id).emit('meeting_phase_change', { phase: 'VOTING', timeLeft: 60 });
           } else io.to(room.id).emit('meeting_timer_tick', { phase: 'DISCUSS', timeLeft: room.phaseTime });
         } else if (room.meetingPhase === 'VOTING') {
           if (room.phaseTime <= 0) { clearInterval(room.meetingTimer); resolveMeeting(room); }
