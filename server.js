@@ -18,6 +18,8 @@ const SAB_CD = 30000;      // 방해공작 쿨다운 (방 전체 공유)
 const DOOR_MS = 10000;     // 문 닫힘 시간
 const DOOR_CD = 30000;     // 문 쿨다운 (방마다 따로)
 const DOOR_CD_INIT = 10000; // 시작/회의 후 첫 문 쿨다운
+const EMERGENCY_CD = 30000; // 긴급회의 버튼 쿨다운
+const EMERGENCY_CD = 30000; // 긴급회의 버튼 쿨다운
 const SAB_TIME = 30;       // 원자로/산소 제한시간(초)
 const INTRO_MS = 2500;     // 회의 시작 연출 시간 (클라이언트 index.html 의 값과 맞춰야 함)
 const EJECT_MS = 5000;     // 추방 결과(타이핑) 화면 시간
@@ -46,6 +48,26 @@ function assignTasks(n) {
     return { id, key, seed, done: false, stage: 0, steps: TASK_DEFS[key].stages(rng(seed)).length };
   });
 }
+// 미션 균등 배정: 같은 미션이 2~3명에게 고르게 걸리도록 (10명 방 기준)
+function assignTasksBalanced(ids) {
+  const k = taskCount(ids.length), count = {}, out = {};
+  ALL_TASKS.forEach(t => { count[t] = 0; });
+  ids.forEach(id => {
+    const picked = [];
+    for (let i = 0; i < k; i++) {
+      const cand = ALL_TASKS.filter(t => !picked.includes(t));
+      const min = Math.min(...cand.map(t => count[t]));
+      const pool = cand.filter(t => count[t] === min);
+      const t = pool[Math.floor(Math.random() * pool.length)];
+      picked.push(t); count[t]++;
+    }
+    out[id] = shuffle(picked).map((key, idx) => {
+      const seed = Math.floor(Math.random() * 1e9);
+      return { id: idx, key, seed, done: false, stage: 0, steps: TASK_DEFS[key].stages(rng(seed)).length };
+    });
+  });
+  return out;
+}
 function taskProgress(room) {
   let done = 0, total = 0;
   Object.values(room.players).forEach(p => {
@@ -54,8 +76,18 @@ function taskProgress(room) {
   return { done, total };
 }
 
-const pub = room => { const { meetingTimer, sabTimer, cams, ...rest } = room; return rest; };
+const pub = room => { const { meetingTimer, sabTimer, cams, moveTimer, dirtyMoves, ...rest } = room; return rest; };
 
+// 위치는 서버가 80ms 마다 모아서 한 번에 보냄 (무료 서버에서 메시지 폭주로 1~2초 멈추는 현상 방지)
+function flushMoves(room) {
+  if (!rooms[room.id]) { clearInterval(room.moveTimer); return; }
+  const ids = Object.keys(room.dirtyMoves || {});
+  if (!ids.length) return;
+  const list = [];
+  ids.forEach(id => { const p = room.players[id]; if (p) list.push({ id, x: p.x, y: p.y, dir: p.dir, isMoving: p.isMoving }); });
+  room.dirtyMoves = {};
+  if (list.length) io.to(room.id).volatile.emit('players_moved', list);
+}
 function sabPublic(room) {
   const s = room.sab;
   return {
@@ -141,7 +173,10 @@ io.on('connection', (socket) => {
     room.cams.clear();
 
     const imposterCount = ids.length >= 7 ? 2 : 1;
+    room.emergencyReadyAt = Date.now() + EMERGENCY_CD;
+    room.emergencyReadyAt = Date.now() + EMERGENCY_CD;
     const imposters = new Set(shuffle(ids).slice(0, imposterCount)); // Fisher-Yates 랜덤
+    const balancedTasks = assignTasksBalanced(ids);
 
     ids.forEach((id, idx) => {
       const angle = (idx / ids.length) * Math.PI * 2;
@@ -156,13 +191,15 @@ io.on('connection', (socket) => {
       p.x = SPAWN.x + Math.cos(angle) * SPAWN.r;
       p.y = SPAWN.y + Math.sin(angle) * SPAWN.r;
       p.lastKillTime = Date.now();
-      p.tasks = assignTasks(ids.length);
+      p.tasks = balancedTasks[id];
     });
 
     if (room.sabTimer) clearInterval(room.sabTimer);
     room.sabTimer = setInterval(() => sabTick(room), 1000);
 
     io.to(room.id).emit('game_started', { players: room.players, imposterCount });
+    io.to(room.id).emit('emergency_cd', { ms: EMERGENCY_CD });
+    io.to(room.id).emit('emergency_cd', { ms: EMERGENCY_CD });
     io.to(room.id).emit('task_progress', taskProgress(room));
     sendSab(room);
     io.emit('room_list', getRoomList());
@@ -175,7 +212,9 @@ io.on('connection', (socket) => {
     const now = Date.now();
     if ((p.ventBusyUntil && now < p.ventBusyUntil) || (p.ventOpeningUntil && now < p.ventOpeningUntil)) return;
     p.x = pos.x; p.y = pos.y; p.dir = pos.dir; p.isMoving = pos.isMoving;
-    socket.to(socket.roomId).emit('player_moved', { id: socket.id, x: pos.x, y: pos.y, dir: pos.dir, isMoving: pos.isMoving });
+    room.dirtyMoves = room.dirtyMoves || {};
+    room.dirtyMoves[socket.id] = 1;
+    if (!room.moveTimer) room.moveTimer = setInterval(() => flushMoves(room), 80);
   });
 
   // 벤트 뚜껑은 탑승/하차 전에 먼저 열어 모든 플레이어에게 보여줍니다.
@@ -221,6 +260,8 @@ io.on('connection', (socket) => {
     if (!killer || killer.role !== 'IMPOSTOR' || !killer.isAlive || killer.inVent) return;
     if (!victim || !victim.isAlive) return;
     if (Math.hypot(killer.x - victim.x, killer.y - victim.y) > 220) return;
+    if (Date.now() - (killer.lastKillTime || 0) < 24000) return; // 킬 쿨다운
+    if (Date.now() - (killer.lastKillTime || 0) < 24000) return; // 킬 쿨다운
 
     victim.isAlive = false;
     victim.visual = null;
@@ -334,6 +375,8 @@ io.on('connection', (socket) => {
     const p = room.players[socket.id];
     if (!p || !p.isAlive) return;
     if (room.sab && (room.sab.type === 'reactor' || room.sab.type === 'o2')) return; // 원자로/산소 중 불가
+    if (Date.now() < (room.emergencyReadyAt || 0)) return; // 긴급회의 쿨다운
+    if (Date.now() < (room.emergencyReadyAt || 0)) return; // 긴급회의 쿨다운
     startMeeting(room, p, 'EMERGENCY', null);
   });
 
@@ -349,6 +392,32 @@ io.on('connection', (socket) => {
       .sort((a, b) => a.d - b.d);
     if (!near.length) return;
     startMeeting(room, p, 'REPORT', near[0].b);
+  });
+
+  socket.on('lobby_chat', (msg) => {
+    const room = rooms[socket.roomId];
+    if (!room || room.state !== 'LOBBY') return;
+    const sender = room.players[socket.id];
+    if (!sender) return;
+    const now = Date.now();
+    if (now - (sender.lastLobbyChat || 0) < 1000) return;
+    const text = String(msg).trim().slice(0, 100);
+    if (!text) return;
+    sender.lastLobbyChat = now;
+    io.to(room.id).emit('new_lobby_chat', { senderId: socket.id, senderName: sender.name, senderColor: sender.color, text });
+  });
+
+  socket.on('lobby_chat', (msg) => {
+    const room = rooms[socket.roomId];
+    if (!room || room.state !== 'LOBBY') return;
+    const sender = room.players[socket.id];
+    if (!sender) return;
+    const now = Date.now();
+    if (now - (sender.lastLobbyChat || 0) < 1000) return;
+    const text = String(msg).trim().slice(0, 100);
+    if (!text) return;
+    sender.lastLobbyChat = now;
+    io.to(room.id).emit('new_lobby_chat', { senderId: socket.id, senderName: sender.name, senderColor: sender.color, text });
   });
 
   socket.on('meeting_chat', (msg) => {
@@ -391,6 +460,7 @@ io.on('connection', (socket) => {
 
       if (Object.keys(room.players).length === 0) {
         [room.meetingTimer, room.sabTimer].forEach(t => t && clearInterval(t));
+        if (room.moveTimer) clearInterval(room.moveTimer);
         delete rooms[roomId];
       } else {
         if (room.hostId === socket.id) room.hostId = Object.keys(room.players)[0];
@@ -499,7 +569,11 @@ io.on('connection', (socket) => {
           });
           room.sabCd = SAB_CD;
           room.doorCd = Object.fromEntries(DOOR_ROOMS.map(k => [k, Date.now() + DOOR_CD_INIT]));
+          room.emergencyReadyAt = Date.now() + EMERGENCY_CD;
+          room.emergencyReadyAt = Date.now() + EMERGENCY_CD;
           io.to(room.id).emit('resume_game', { players: room.players });
+          io.to(room.id).emit('emergency_cd', { ms: EMERGENCY_CD });
+          io.to(room.id).emit('emergency_cd', { ms: EMERGENCY_CD });
           sendSab(room);
         }
       }, EJECT_MS);
