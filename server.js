@@ -19,7 +19,6 @@ const DOOR_MS = 10000;     // 문 닫힘 시간
 const DOOR_CD = 30000;     // 문 쿨다운 (방마다 따로)
 const DOOR_CD_INIT = 10000; // 시작/회의 후 첫 문 쿨다운
 const EMERGENCY_CD = 30000; // 긴급회의 버튼 쿨다운
-const EMERGENCY_CD = 30000; // 긴급회의 버튼 쿨다운
 const SAB_TIME = 30;       // 원자로/산소 제한시간(초)
 const INTRO_MS = 2500;     // 회의 시작 연출 시간 (클라이언트 index.html 의 값과 맞춰야 함)
 const EJECT_MS = 5000;     // 추방 결과(타이핑) 화면 시간
