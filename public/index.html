@@ -52,14 +52,14 @@ canvas { display: block; width: 100%; height: 100%; }
 
 #sab-banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: none; padding: 8px 22px; background: #ef4444; color: #fff; border: 3px solid #0f172a; border-radius: 20px; font-size: 18px; z-index: 62; pointer-events: none; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .6; } }
-#lobby-chat { position: absolute; left: 16px; bottom: 160px; width: clamp(220px, 34vw, 340px); display: none; flex-direction: column; gap: 6px; z-index: 61; pointer-events: auto; }
-#lobby-chat-log { max-height: clamp(70px, 22vh, 160px); overflow-y: auto; padding: 6px 8px; background: rgba(15,23,42,.55); border-radius: 12px; color: #fff; font-size: clamp(11px, 2.2vh, 14px); display: flex; flex-direction: column; gap: 3px; }
-#lobby-chat-log:empty { display: none; }
-.lobby-chat-row { word-break: break-all; }
-.lc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid #000; margin-right: 5px; }
-#lobby-chat-bar { display: flex; gap: 6px; }
-#lobby-chat-bar input { padding: 8px 10px; font-size: 14px; }
-#lobby-chat-bar button { width: auto; padding: 8px 14px; background: #0284c7; color: #fff; border: 2px solid #0f172a; font-size: 14px; cursor: pointer; }
+#lobby-chat { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 450; display: none; justify-content: center; align-items: center; padding: 16px; pointer-events: auto; }
+.lobby-chat-box { background: #fff; border: 4px solid #64748b; border-radius: 20px; width: min(560px, 94vw); height: min(420px, 86vh); display: flex; flex-direction: column; padding: 16px; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.25); }
+.hud-chat-btn { padding: 0; }
+.meeting-chat-btn, .hud-chat-btn { position: relative; }
+.chat-dot { position: absolute; top: -4px; right: -4px; width: 15px; height: 15px; border-radius: 50%; background: #ef4444; border: 2px solid #fff; display: none; box-shadow: 0 0 6px rgba(239,68,68,.8); }
+.has-unread .chat-dot { display: block; }
+.has-unread { animation: chatWiggle 1.6s ease-in-out infinite; }
+@keyframes chatWiggle { 0%, 55%, 100% { transform: rotate(0deg); } 8% { transform: rotate(-14deg); } 16% { transform: rotate(14deg); } 24% { transform: rotate(-10deg); } 32% { transform: rotate(10deg); } 40% { transform: rotate(-5deg); } 48% { transform: rotate(5deg); } }
 
 /* 누가 나갔는지 왼쪽에 뜨는 빨간 알림 */
 #leave-toasts { position: fixed; top: clamp(70px, 14vh, 92px); left: 16px; right: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; z-index: 2000; pointer-events: none; }
@@ -106,6 +106,13 @@ canvas { display: block; width: 100%; height: 100%; }
 .voter-card.dead { background: #e2e8f0; pointer-events: none; }
 .voter-card.dead .vc-dot, .voter-card.dead .vc-name { opacity: .45; filter: grayscale(1); }
 .voter-card.locked { pointer-events: none !important; }
+.vote-confirm { display: none; gap: 6px; margin-left: auto; }
+.voter-card.selected { border-color: #0284c7; }
+.voter-card.selected .vote-confirm { display: flex; animation: voteConfirmIn .14s ease-out; }
+.vote-confirm button { width: 1.9em; height: 1.9em; padding: 0; border-radius: 50%; font-size: .75em; border: 3px solid #0f172a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.vc-yes { background: #22c55e; color: #fff; }
+.vc-no { background: #ef4444; color: #fff; }
+@keyframes voteConfirmIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
 .vc-left { display: flex; align-items: center; gap: .5em; min-width: 0; }
 .vc-dotwrap { position: relative; width: 1.6em; height: 1.6em; flex: none; }
 .vc-dot { width: 100%; height: 100%; border-radius: 50%; border: 3px solid #000; }
@@ -213,6 +220,7 @@ canvas { display: block; width: 100%; height: 100%; }
 
 <div class="top-right-hud" id="top-right-hud">
   <div class="hud-circle-btn hud-map-btn" onclick="toggleMapModal()" title="지도"></div>
+  <button class="hud-circle-btn hud-chat-btn" id="lobby-chat-btn" onclick="toggleLobbyChat()" title="채팅" style="display:none;">💬<span class="chat-dot"></span></button>
   <button class="hud-circle-btn hud-fullscreen-btn" id="lobby-fullscreen-btn" onclick="toggleGameFullscreen()" title="전체화면">전체화면</button>
   <button class="hud-circle-btn hud-exit-btn" onclick="leaveToLobby()" title="방 나가기">나가기</button>
 </div>
@@ -230,14 +238,23 @@ canvas { display: block; width: 100%; height: 100%; }
     <div class="action-btn-row">
       <div id="btn-sabotage" class="among-img-btn btn-sabotage" onclick="triggerSabotage()"><div id="sab-cooldown-num" class="cooldown-overlay"></div></div>
       <div id="btn-kill" class="among-img-btn btn-kill" onclick="triggerKill()"><div id="kill-cooldown-num" class="cooldown-overlay"></div></div>
-      <div id="btn-use" class="among-img-btn btn-use" onclick="triggerUse()" style="display:none;"></div>
+      <div id="btn-use" class="among-img-btn btn-use" onclick="triggerUse()" style="display:none;"><div id="use-cooldown-num" class="cooldown-overlay"></div></div>
     </div>
   </div>
 
   <div id="vent-nav-ui"></div>
   <div id="lobby-chat">
-    <div id="lobby-chat-log"></div>
-    <div id="lobby-chat-bar"><input id="lobby-chat-input" type="text" maxlength="100" placeholder="대기실 채팅..." onkeydown="lobbyChatKey(event)"><button onclick="sendLobbyChat()">전송</button></div>
+    <div class="lobby-chat-box">
+      <div class="chat-header">
+        <h3 style="font-size:18px; color:#0f172a;">대기실 채팅</h3>
+        <button class="map-close-btn" style="position:static;" onclick="toggleLobbyChat()">✕</button>
+      </div>
+      <div class="chat-log" id="lobby-chat-log"></div>
+      <div class="chat-input-bar">
+        <input type="text" id="lobby-chat-input" placeholder="채팅 입력 (100자 이내)..." maxlength="100" onkeydown="lobbyChatKey(event)">
+        <button onclick="sendLobbyChat()">전송</button>
+      </div>
+    </div>
   </div>
   <div id="joystick-zone"><div id="joystick-knob"></div></div>
 </div>
@@ -286,7 +303,7 @@ canvas { display: block; width: 100%; height: 100%; }
   <div class="meeting-box">
     <div class="meeting-header">
       <h2 class="meeting-title">🚨 EMERGENCY MEETING</h2>
-      <button class="meeting-chat-btn" onclick="toggleChatModal()">💬</button>
+      <button class="meeting-chat-btn" id="meeting-chat-btn" onclick="toggleChatModal()">💬<span class="chat-dot"></span></button>
     </div>
     <div class="voter-grid" id="voter-list"></div>
     <div class="meeting-footer">
@@ -400,6 +417,8 @@ let sabotageState = { type: null, doors: [], fixed: [], sw: [] };
 let doorReadyLocal = {}, closedSegs = [], adminOpen = false, camOpen = false, cctvCount = 0, sabIconRefs = [];
 let lastChatTime = 0;
 let votedIds = new Set();
+let emergencyReadyAt = 0; // 긴급회의 버튼 쿨다운(30초)
+let voteSelected = null;
 
 const MAP_SCALE = 6.0;
 const MAP_WIDTH = 1024 * MAP_SCALE;
@@ -757,6 +776,7 @@ socket.on('name_taken', m => {
 socket.on('room_joined', ({ roomId, room, myId: assignedId }) => {
   myId = assignedId; currentRoom = room;
   document.getElementById('lobby-chat-log').innerHTML = '';
+  setChatUnread('lobby', false); document.getElementById('lobby-chat').style.display = 'none';
   localPlayer.x = LOBBY_SPAWN.x; localPlayer.y = LOBBY_SPAWN.y;
   switchScreen(null);
   document.getElementById('in-game-ui').style.display = 'block';
@@ -785,6 +805,37 @@ socket.on('player_moved', ({ id, x, y, dir, isMoving }) => {
     if (p.x === undefined) { p.x = x; p.y = y; }
   }
 });
+// ───── 투표: 사람을 누르면 ✔/✖ 가 나오고, ✔ 를 눌러야 투표됨 ─────
+function selectVoteTarget(id) {
+  if (!currentRoom || !currentRoom.players[myId] || !currentRoom.players[myId].isAlive) return;
+  const prev = voteSelected;
+  clearVoteSelect();
+  if (prev === id) return;
+  voteSelected = id;
+  const c = document.getElementById('voter-card-' + id);
+  if (c) c.classList.add('selected');
+}
+function clearVoteSelect() {
+  voteSelected = null;
+  document.querySelectorAll('.voter-card.selected').forEach(c => c.classList.remove('selected'));
+}
+// ───── 위치 동기화: 서버가 묶어서 보내는 위치 목록 처리 ─────
+socket.on('players_moved', (list) => {
+  if (!currentRoom || !Array.isArray(list)) return;
+  const now = performance.now();
+  list.forEach(({ id, x, y, dir, isMoving }) => {
+    if (id === myId) return;
+    const p = currentRoom.players[id];
+    if (!p) return;
+    p.tx = x; p.ty = y; p.dir = dir; p.isMoving = isMoving; p.lastUpd = now;
+    if (p.x === undefined) { p.x = x; p.y = y; }
+  });
+});
+function showDebugBadge(text) {   // 주소 뒤에 ?debug 를 붙이면 화면 끊김 횟수를 표시
+  let b = document.getElementById('debug-badge');
+  if (!b) { b = document.createElement('div'); b.id = 'debug-badge'; b.style.cssText = 'position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:99998;background:rgba(0,0,0,.6);color:#fff;font:12px monospace;padding:2px 8px;border-radius:8px;pointer-events:none'; document.body.appendChild(b); }
+  b.textContent = text;
+}
 socket.on('vent_lid_animated', ({ id, ventId }) => {
   if (id === myId || ventId == null) return;
   // 탑승/하차 이벤트보다 먼저 뚜껑을 열어 캐릭터 모션과 순서를 맞춥니다.
@@ -894,6 +945,7 @@ socket.on('sabotage_updated', (s) => {
   TaskSys.onSab();
   updateSabIcons();
 });
+socket.on('emergency_cd', ({ ms }) => { emergencyReadyAt = Date.now() + ms; });
 socket.on('cctv_count', n => { cctvCount = n; });
 
 socket.on('player_killed', ({ victimId, killerId, body }) => {
@@ -964,6 +1016,7 @@ socket.on('meeting_started', ({ players, phase, timeLeft }) => {
 
   grid.innerHTML = '';
   document.getElementById('skip-voters-box').innerHTML = '';
+  setChatUnread('meeting', false);
   votedIds = new Set();
   Object.values(players).forEach(p => {
     const card = document.createElement('div');
@@ -978,8 +1031,9 @@ socket.on('meeting_started', ({ players, phase, timeLeft }) => {
         <span class="vc-name">${escapeHtml(p.name)}${p.id === myId ? ' (나)' : ''}</span>
         <span id="voted-badge-${p.id}" class="voted-badge" style="display:none;">투표완료</span>
       </div>
+      <div class="vote-confirm"><button class="vc-yes" onclick="event.stopPropagation(); castVote('${p.id}')">✔</button><button class="vc-no" onclick="event.stopPropagation(); clearVoteSelect()">✖</button></div>
       <div id="voted-by-${p.id}" class="voted-by-container"></div>`;
-    card.onclick = () => castVote(p.id);
+    card.onclick = () => selectVoteTarget(p.id);
     grid.appendChild(card);
   });
   document.getElementById('skip-vote-btn').className = 'skip-btn locked';
@@ -1009,6 +1063,7 @@ socket.on('vote_status', ({ voterId, voterName }) => {
 });
 socket.on('meeting_reveal', ({ votes }) => {
   document.getElementById('meeting-timer-box').innerText = `투표 집계 중...`;
+  clearVoteSelect();
   document.querySelectorAll('.voter-card').forEach(c => c.classList.add('locked'));
   document.getElementById('skip-vote-btn').classList.add('locked');
   for (const voterId in votes) {
@@ -1085,6 +1140,7 @@ socket.on('game_over', ({ winner, reason, players }) => {
 function castVote(targetId) {
   if (!currentRoom.players[myId].isAlive) return;
   socket.emit('cast_vote', { targetId });
+  clearVoteSelect();
   document.querySelectorAll('.voter-card').forEach(c => c.classList.add('locked'));
   document.getElementById('skip-vote-btn').classList.add('locked');
 }
@@ -1096,6 +1152,7 @@ function toggleChatModal() {
     const log = document.getElementById('meeting-chat-log');
     log.scrollTop = log.scrollHeight;
     document.getElementById('chat-input').focus();
+    setChatUnread('meeting', false);
   }
 }
 function handleChatKeyDown(e) {
@@ -1119,8 +1176,23 @@ function sendMeetingChat() {
   socket.emit('meeting_chat', text);
   input.value = '';
 }
-// ───── 대기실 채팅 ─────
+// ───── 대기실 채팅 (긴급회의 채팅처럼 위쪽 💬 버튼으로 열기) ─────
 let lastLobbyChat = 0;
+function setChatUnread(kind, on) {   // 새 채팅: 버튼이 흔들리고 빨간 점 표시
+  const btn = document.getElementById(kind === 'lobby' ? 'lobby-chat-btn' : 'meeting-chat-btn');
+  if (btn) btn.classList.toggle('has-unread', !!on);
+}
+function toggleLobbyChat() {
+  const m = document.getElementById('lobby-chat');
+  const show = m.style.display !== 'flex';
+  m.style.display = show ? 'flex' : 'none';
+  if (show) {
+    setChatUnread('lobby', false);
+    const log = document.getElementById('lobby-chat-log');
+    log.scrollTop = log.scrollHeight;
+    document.getElementById('lobby-chat-input').focus();
+  }
+}
 function sendLobbyChat() {
   const input = document.getElementById('lobby-chat-input');
   const text = input.value.trim();
@@ -1134,12 +1206,17 @@ function sendLobbyChat() {
 function lobbyChatKey(e) { if (e.key === 'Enter') { if (e.isComposing || e.keyCode === 229) return; sendLobbyChat(); } }
 socket.on('new_lobby_chat', ({ senderId, senderName, senderColor, text }) => {
   const log = document.getElementById('lobby-chat-log');
+  const isMine = senderId === myId;
   const row = document.createElement('div');
-  row.className = 'lobby-chat-row';
-  row.innerHTML = '<span class="lc-dot" style="background:' + senderColor + '"></span><b>' + escapeHtml(senderName) + '</b> ' + escapeHtml(text);
+  row.className = 'chat-row ' + (isMine ? 'mine' : 'other');
+  const info = isMine
+    ? '<div class="chat-sender-info"><span style="font-weight:bold; color:#64748b;">나</span></div>'
+    : '<div class="chat-sender-info"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + senderColor + '; border:1px solid #000;"></span><span style="font-weight:bold; color:#334155;">' + escapeHtml(senderName) + '</span></div>';
+  row.innerHTML = info + '<div class="chat-bubble ' + (isMine ? 'mine' : 'other') + '">' + escapeHtml(text) + '</div>';
   log.appendChild(row);
-  while (log.children.length > 40) log.removeChild(log.firstChild);
+  while (log.children.length > 60) log.removeChild(log.firstChild);
   log.scrollTop = log.scrollHeight;
+  if (!isMine && document.getElementById('lobby-chat').style.display !== 'flex') setChatUnread('lobby', true);
 });
 function appendMeetingSystemMessage(message) {
   const log = document.getElementById('meeting-chat-log');
@@ -1165,6 +1242,7 @@ socket.on('new_meeting_chat', ({ senderId, senderName, senderColor, isAlive, has
         <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${senderColor}; border:1px solid #000;"></span>
         <span style="font-weight:bold; color:#334155;">${escapeHtml(senderName)}${isAlive ? '' : ' 👻'}</span>${tag}</div>`;
   row.innerHTML = `${senderHtml}<div class="chat-bubble ${isMine ? 'mine' : 'other'}">${escapeHtml(text)}</div>`;
+  if (!isMine && document.getElementById('chat-modal').style.display !== 'flex') setChatUnread('meeting', true);
   log.appendChild(row);
   log.scrollTop = log.scrollHeight;
 });
@@ -1173,7 +1251,7 @@ socket.on('new_meeting_chat', ({ senderId, senderName, senderColor, isAlive, has
 const critSab = () => sabotageState.type === 'reactor' || sabotageState.type === 'o2';
 function nearTable() {
   const me = currentRoom && currentRoom.players[myId];
-  return !!me && me.isAlive && !critSab() && Math.hypot(TABLE.x - localPlayer.x, TABLE.y - localPlayer.y) < 300;
+  return !!me && me.isAlive && !critSab() && Date.now() >= emergencyReadyAt && Math.hypot(TABLE.x - localPlayer.x, TABLE.y - localPlayer.y) < 300;
 }
 const sabCdSec = () => Math.ceil((sabotageState.cd || 0) / 1000);
 const sabReady = () => !sabotageState.type && (sabotageState.cd || 0) <= 0;
@@ -1479,7 +1557,8 @@ function updateRoomUI() {
   roomInfo.innerText = `${currentRoom.name} | ${count}/${currentRoom.maxPlayers}`;
   // 방 이름/인원수는 대기실에서만 표시합니다.
   roomInfo.style.display = inLobby ? 'block' : 'none';
-  document.getElementById('lobby-chat').style.display = inLobby ? 'flex' : 'none';
+  document.getElementById('lobby-chat-btn').style.display = inLobby ? 'flex' : 'none';
+  if (!inLobby) { document.getElementById('lobby-chat').style.display = 'none'; setChatUnread('lobby', false); }
   document.getElementById('start-btn-in-room').style.display = (currentRoom.hostId === myId && inLobby) ? 'block' : 'none';
   // 대기실에서는 나가기만, 게임 중에는 지도와 나가기 버튼을 표시합니다.
   document.getElementById('top-right-hud').style.display = 'flex';
@@ -1976,6 +2055,13 @@ function gameLoop(ts) {
     const sabOv = document.getElementById('sab-cooldown-num');
     const alive = currentRoom.players[myId].isAlive;
     const nearUse = nearTable() || nearAdmin() || nearSec() || !!TaskSys.nearest();
+    {  // 긴급회의 버튼 쿨다운 표시 (테이블 근처에서 다른 사용할 게 없을 때)
+      const cdRem = Math.ceil((emergencyReadyAt - Date.now()) / 1000);
+      const nearTableNow = alive && !critSab() && Math.hypot(TABLE.x - localPlayer.x, TABLE.y - localPlayer.y) < 300;
+      const useOv = document.getElementById('use-cooldown-num');
+      if (nearTableNow && cdRem > 0 && !nearUse) { useOv.style.display = 'flex'; if (useOv._v !== cdRem) { useOv._v = cdRem; useOv.innerText = cdRem; } }
+      else useOv.style.display = 'none';
+    }
 
     if (role === 'IMPOSTOR') {
       // 사보타지 버튼 (항상 사보타지 모양)
